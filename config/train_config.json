@@ -1,0 +1,15 @@
+{
+    "training": {
+        "testSize": 0.2,
+        "transformation": "log",
+        "processingData": true,
+        "model": {
+            "name": "linear_regression",
+            "parameters": {},
+            "savePath": ""
+        },
+        "metrics": [
+            "mean_squared_error"
+        ]
+    }
+}
