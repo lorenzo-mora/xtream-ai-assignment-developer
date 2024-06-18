@@ -1,8 +1,8 @@
 {
     "data": {
-        "onlineSource": true,
+        "onlineSource": false,
         "url": "https://raw.githubusercontent.com/xtreamsrl/xtream-ai-assignment-engineer/main/datasets/diamonds/diamonds.csv",
-        "localPath": "data/diamonds.csv",
+        "localPath": "diamonds.csv",
         "saveData": false
     },
     "preparation": {

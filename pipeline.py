@@ -38,8 +38,8 @@ class DataManager:
     # 1. Data Acquisition
     def fetch_data(self) -> Tuple[pd.DataFrame, str]:
         self.fetch_from_url = get_config_value(self.configuration,
-                                          ['data', 'onlineSource'],
-                                          DEFAULT_DATA_CONF)
+                                               ['data', 'onlineSource'],
+                                               DEFAULT_DATA_CONF)
         if self.fetch_from_url:
             # The data are to be downloaded online
             source_path = get_config_value(self.configuration,
@@ -47,15 +47,16 @@ class DataManager:
                                            DEFAULT_DATA_CONF)
         else:
             # Data are to be retrieved from local
-            source_path = get_config_value(self.configuration,
+            source_name = get_config_value(self.configuration,
                                            ['data', 'localPath'],
                                            DEFAULT_DATA_CONF)
+            source_path = BASE_PATH.joinpath(f'data/{source_name}')
         self.logger.info(f"Acquiring data from '{source_path}'")
 
         data = (self._fetch_from_online(url=source_path)
                 if self.fetch_from_url else self._fetch_from_local(path_to_data=source_path))
 
-        return data, source_path.rsplit('/', 1)[-1]
+        return data, str(source_path).rsplit('/', 1)[-1]
 
     def _fetch_from_online(self, url: str) -> pd.DataFrame:        
         try:

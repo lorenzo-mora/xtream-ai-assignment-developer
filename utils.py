@@ -13,13 +13,13 @@ import pandas as pd
 from scipy.special import inv_boxcox
 from scipy.stats import zscore
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, PowerTransformer, QuantileTransformer
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 DEFAULT_DATA_CONF = {
     "data": {
         "onlineSource": True,
         "url": "https://raw.githubusercontent.com/xtreamsrl/xtream-ai-assignment-engineer/main/datasets/diamonds/diamonds.csv",
-        "localPath": "data/diamonds.csv",
+        "localPath": "diamonds.csv",
         "saveData": False
     },
     "preparation": {
@@ -73,7 +73,12 @@ DEFAULT_TRAIN_CONF = {
         "metrics":[
             "r2_score",
             "mean_absolute_error"
-        ]
+        ],
+        "tuning": {
+            "active": False,
+            "trialsNumber": 5,
+            "studyName": "Diamonds Linear Regression"
+        }
     },
     "logger": {
         "configName": "logger.ini",
@@ -87,8 +92,8 @@ DEFAULT_TRAIN_CONF = {
 }
 
 def get_config_value(configuration: Dict[str, Any],
-                     keys: list,
-                     default_conf: Dict[str, Any]) -> Any:
+                     keys: List[str],
+                     default_conf: Dict[str, Any] = {}) -> Any:
     """Retrieve a nested configuration value from a given configuration
     dictionary.
 
@@ -133,10 +138,15 @@ def get_config_value(configuration: Dict[str, Any],
     default_value = default_conf
 
     for key in keys:
-        conf_value = conf_value.get(key, {})
+        if isinstance(conf_value, dict) and key in conf_value:
+            conf_value = conf_value[key]
+        else:
+            # If key does not exist in the main configuration, switch to the default configuration path
+            return default_conf.get(key, default_value.get(key))
+        
         default_value = default_value.get(key, {})
 
-    return conf_value if conf_value else default_value
+    return conf_value
 
 def transform_data(data: pd.Series,
                    transformation: str) -> Tuple[pd.Series, Any]:
