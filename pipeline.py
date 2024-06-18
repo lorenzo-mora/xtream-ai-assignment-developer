@@ -2,10 +2,12 @@ from datetime import datetime
 import json
 from logging import Logger
 from pathlib import Path
+import pickle
 import tempfile
 import time
-from typing import Any, List, Optional, Tuple
+from typing import List, Tuple
 import uuid
+from matplotlib import pyplot as plt
 import optuna
 import pandas as pd
 from sklearn.ensemble import (AdaBoostRegressor, GradientBoostingRegressor,
@@ -18,6 +20,7 @@ from sklearn.metrics import (explained_variance_score, mean_absolute_error,
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, PowerTransformer, QuantileTransformer
 from sklearn.svm import SVR
 import joblib
 import requests
@@ -25,7 +28,8 @@ from sklearn.tree import DecisionTreeRegressor
 from xgboost import XGBRegressor
 
 from utils import (get_config_value, DEFAULT_TRAIN_CONF, DEFAULT_DATA_CONF,
-                   LoggerManager, inverse_transform_data, transform_data, FileUtils, snake_to_camel)
+                   LoggerManager, inverse_transform_data, transform_data,
+                   FileUtils, snake_to_camel)
 
 BASE_PATH = Path(__file__).resolve().parent
 
@@ -120,23 +124,27 @@ class DataManager:
         if self.is_2b_clean:
             processed_data = self._clean_data(processed_data)
         if self.is_2b_reduced:
-            drop_columns = get_config_value(
+            self.drop_columns = get_config_value(
                 self.configuration, ['preparation', 'dropColumns', 'columns'],
                 DEFAULT_DATA_CONF)
             processed_data = self._drop_columns(processed_data,
-                                                columns_to_drop=drop_columns)
+                                                columns_to_drop=self.drop_columns)
         if self.is_2b_converted_dummy:
             convert_to_dummies = get_config_value(
-                self.configuration, ['preparation', 'toDummy', 'columns'],
+                self.configuration, ['preparation', 'toDummy', 'columns_categories'],
                 DEFAULT_DATA_CONF)
             processed_data = self._categorical_to_dummy(
-                processed_data, columns_to_convert=convert_to_dummies)
+                processed_data, columns_categories=convert_to_dummies)
+            self.logger.debug(
+                f"Converted categorical columns into dummies: {list(convert_to_dummies.keys())}")
         if self.is_2b_converted_ordinal:
             convert_to_ordinal = get_config_value(
                 self.configuration, ['preparation', 'toOrdinal', 'columns_categories'],
                 DEFAULT_DATA_CONF)
-            processed_data = self._categorical_to_ordinal(
+            processed_data = DataManager._categorical_to_ordinal(
                 processed_data, columns_categories=convert_to_ordinal)
+            self.logger.debug(
+                f"Converted categorical columns into ordinal: {list(convert_to_ordinal.keys())}")
 
         # Is it required to save the processed data?
         save = get_config_value(self.configuration,
@@ -172,25 +180,31 @@ class DataManager:
         data = data.drop(columns=columns_to_drop)
         self.logger.debug(f"Dropped columns: {columns_to_drop}")
         return data
-    
-    def _categorical_to_dummy(self,
-                              data: pd.DataFrame,
-                              columns_to_convert: list) -> pd.DataFrame:
-        """Convert categorical variables into dummy variables."""
-        data = pd.get_dummies(data, columns=columns_to_convert, drop_first=True)
-        self.logger.debug(
-            f"Converted categorical columns into dummies: {columns_to_convert}")
+
+    @staticmethod
+    def _categorical_to_dummy(data: pd.DataFrame,
+                              columns_categories: list) -> pd.DataFrame:
+        # """Convert categorical variables into dummy variables."""
+        # data = pd.get_dummies(data, columns=columns_categories, drop_first=True)
+        """Convert specified columns in a dataframe to dummy/one-hot
+        encoded format based on given dictionary, in which keys are
+        column names to be converted and values are lists of possible
+        values.
+        """
+        for column, values in columns_categories.items():
+            # Create dummy variables for the specified values
+            for value in values:
+                data[f"{column}_{value}"] = (data[column] == value).astype(int)
+            # Drop the original column if needed
+            data = data.drop(column, axis=1)
         return data
 
-    def _categorical_to_ordinal(self,
-                                data: pd.DataFrame,
+    @staticmethod
+    def _categorical_to_ordinal(data: pd.DataFrame,
                                 columns_categories: dict) -> pd.DataFrame:
         """Convert categorical variables into ordinal variables."""
         for col, cats in columns_categories.items():
             data[col] = pd.Categorical(data[col], categories=cats, ordered=True)
-
-        self.logger.debug(
-            f"Converted categorical columns into ordinal: {list(columns_categories.keys())}")
         return data
 
 class TrainManager:
@@ -221,10 +235,21 @@ class TrainManager:
     }
 
     def __init__(self,
-                 trining_config_file: Path,
+                 training_config_file: Path,
                  data_config_file: Path,
                  logger: Logger) -> None:
-        self.configuration = FileUtils.retrieve_config(trining_config_file,
+        """Initializes the TrainManager instance.
+
+        Parameters
+        ----------
+        `trining_config_file` : Path
+            Path to the training configuration file.
+        `data_config_file` : Path
+            Path to the data configuration file.
+        `logger` : Logger
+            Logger instance for logging information.
+        """
+        self.configuration = FileUtils.retrieve_config(training_config_file,
                                                        default_conf=DEFAULT_TRAIN_CONF)
         self.logger = logger
 
@@ -242,6 +267,13 @@ class TrainManager:
         self.X_train, self.X_val, self.y_train, self.y_val = self._data_generation()
 
     def run(self, model_parameters: dict = {}):
+        """Runs the model training process.
+
+        Parameters
+        ----------
+        `model_parameters` : dict, optional
+            Dictionary of model parameters to override default settings.
+        """
         self.logger.info("Performing model training")
         results = self._train_model(model_parameters)
 
@@ -252,7 +284,9 @@ class TrainManager:
 
         self._save_training()
 
-    def grid_search(self):
+    def hyperparameters_search(self):
+        """Performs hyperparameter optimization using Optuna and trains
+        the model with the best found parameters."""
         self.logger.info(
             f"A Bayesian tuning of {self.number_of_trials} trials of the "
             f"model's hyperparameters is performed: {self.study_name}")
@@ -267,7 +301,7 @@ class TrainManager:
         self.run(model_parameters=study.best_params)
 
     def _retrieve_configuration(self) -> None:
-        """Retrieve the model configuration from the config file."""
+        """Retrieves the model configuration from the configuration file."""
 
         self.logger.info(
             f"Retrieving the model configuration for training {self.training_uuid}")
@@ -315,6 +349,14 @@ class TrainManager:
                 self.configuration, ['training', 'tuning', 'studyName'], DEFAULT_TRAIN_CONF)
 
     def _data_generation(self) -> List[pd.Series]:
+        """Generates training and validation datasets.
+
+        Returns
+        -------
+        List[pd.Series]
+            A list containing training and validation data splits:
+            [X_train, X_val, y_train, y_val]
+        """
         data, dataframe_name = self.dm.fetch_data()
 
         if self.to_process:
@@ -341,13 +383,21 @@ class TrainManager:
             self.logger.error(f"The transformation {transformation_name} "
                               f"could not be applied to the target data: {e}")
 
+        # Saving the fitted transformer model
+        if any(isinstance(self.fitted_parameters, t_class)
+               for t_class in [StandardScaler, MinMaxScaler,
+                               PowerTransformer, QuantileTransformer]):
+            dest_path = BASE_PATH.joinpath('train/transformer')
+            model_name = f"transformer_{self.training_uuid}"
+            joblib.dump(self.model, f'{dest_path}/{model_name}.pkl')
+
         # Update of current training history
         self.history['ts'] = datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
         self.history['data'] = {
             'name': dataframe_name,
             'onlineSource': self.dm.fetch_from_url,
             'clean': self.dm.is_2b_clean,
-            'reduced': self.dm.is_2b_reduced,
+            'reduced': self.dm.drop_columns if self.dm.is_2b_reduced else self.dm.is_2b_reduced,
             'dummy': self.dm.is_2b_converted_dummy,
             'ordinal': self.dm.is_2b_converted_ordinal
             }
@@ -358,6 +408,18 @@ class TrainManager:
 
     # 3. Model Training
     def _train_model(self, model_parameters: dict = {}) -> dict:
+        """Trains the model with the given parameters.
+
+        Parameters
+        ----------
+        `model_parameters` : dict, optional
+            Dictionary of model parameters to override default settings.
+
+        Returns
+        -------
+        dict
+            A dictionary containing evaluation metrics.
+        """
 
         model_class, default_params = self.MODEL_MAPPING[self.model_name]
 
@@ -385,10 +447,17 @@ class TrainManager:
 
     # 4. Model Evaluation
     def _evaluate_model(self) -> dict:
-        y_pred = self.model.predict(self.X_val)
-        y_pred = inverse_transform_data(pd.Series(y_pred),
-                                        self.transformation,
-                                        self.fitted_parameters)
+        """Evaluates the trained model using the validation dataset.
+
+        Returns
+        -------
+        dict
+            A dictionary containing evaluation metrics.
+        """
+        self.y_pred = self.model.predict(self.X_val)
+        self.y_pred = inverse_transform_data(pd.Series(self.y_pred),
+                                             self.transformation,
+                                             self.fitted_parameters)
 
         if "mean_absolute_error" not in self.metrics:
             # The MAE is always calculated
@@ -399,10 +468,22 @@ class TrainManager:
             if metric_name not in self.METRIC_MAPPING:
                 continue
             metric_func, params = self.METRIC_MAPPING[metric_name]
-            results[metric_name] = metric_func(self.y_val, y_pred, **params)
+            results[metric_name] = metric_func(self.y_val, self.y_pred, **params)
         return results
-    
+
+    def plot_gof(self, filename: str) -> None:
+        """It generates the goodness-of-fit graph and saves it with the
+        name `filename`."""
+        plt.plot(self.y_val, self.y_pred, '.')
+        plt.plot(self.y_val, self.y_val, linewidth=3, c='black')
+        plt.xlabel('Actual')
+        plt.ylabel('Predicted')
+        # Save the plot
+        file_path = BASE_PATH.joinpath(f'train/images/{filename}.png')
+        plt.savefig(file_path, bbox_inches='tight')
+
     def _save_training(self) -> None:
+        """Saves the training history and the trained model to files."""
         # Read previous results
         stored_history = {'training': []}
         train_folder = BASE_PATH.joinpath('train')
@@ -423,16 +504,47 @@ class TrainManager:
         if not models_folder.exists():
             models_folder.mkdir(parents=False)
         model_name = f'model_{self.training_uuid}'
-        joblib.dump(self.model, f'{models_folder}/{model_name}.pkl')
+        with open(f'{models_folder}/{model_name}.pkl','wb') as f:
+            pickle.dump(self.model, f)
+
+        # Elaboration of the GOF plot
+        self.plot_gof(filename=model_name)
         self.logger.info("Saved all data")
 
     def _objective(self, trial: optuna.trial.Trial) -> float:
+        """Objective function for hyperparameter optimization.
+
+        Parameters
+        ----------
+        `trial` : optuna.trial.Trial
+            Optuna trial object to sample hyperparameters.
+
+        Returns
+        -------
+        float
+            The mean absolute error (MAE) of the model for the given trial.
+        """
         epoch_params = TrainManager.process_parameters(self.config_model_params, trial)
         results = self._train_model(epoch_params)
         return results['mean_absolute_error']
 
     @staticmethod
     def process_parameters(params: dict, trial: optuna.trial.Trial) -> dict:
+        """Processes hyperparameters for the given trial.
+
+        Parameters
+        ----------
+        `params` : dict
+            Dictionary of parameter names and their corresponding
+            suggestion strings.
+        `trial` : optuna.trial.Trial
+            Optuna trial object to sample hyperparameters.
+
+        Returns
+        -------
+        dict
+            A dictionary of processed hyperparameters.
+        """
         processed_params = {}
         for key, value in params.items():
             if (isinstance(value, str) and
@@ -447,17 +559,28 @@ class TrainManager:
 # 5. Automated Pipeline
 def main():
 
-    # logger_config_path = BASE_PATH.joinpath("config/logger.ini")
-    # logger_file = BASE_PATH.joinpath('log/training.log')
     training_config_file = BASE_PATH.joinpath("config/train_config.json")
     data_config_file = BASE_PATH.joinpath("config/data_config.json")
     logger_manager = LoggerManager(config_path=training_config_file)
     logger = logger_manager.logger
 
-    tm = TrainManager(trining_config_file=training_config_file,
+    tm = TrainManager(training_config_file=training_config_file,
                       data_config_file=data_config_file,
                       logger=logger)
-    tm.grid_search()
+
+    configuration = FileUtils.retrieve_config(training_config_file,
+                                              default_conf=DEFAULT_TRAIN_CONF)
+    # If Bayesian optimisation is specified in the configuration
+    # (`tuning.active = True`), then the TrainManager.grid_search()
+    # method is executed
+    is_optimisation = get_config_value(configuration,
+                                       ['training', 'tuning', 'active'],
+                                       DEFAULT_TRAIN_CONF)
+    if is_optimisation:
+        tm.hyperparameters_search()
+    else:
+        # Otherwise, single model training is performed
+        tm.run()
 
 if __name__ == "__main__":
     main()

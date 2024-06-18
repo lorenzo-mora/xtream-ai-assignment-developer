@@ -24,7 +24,7 @@
         ],
         "tuning": {
             "active": true,
-            "trialsNumber": 5,
+            "trialsNumber": 150,
             "studyName": "Diamonds XGBoost Regression"
         }
     },

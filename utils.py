@@ -15,6 +15,12 @@ from scipy.stats import zscore
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, PowerTransformer, QuantileTransformer
 from typing import Any, Dict, List, Optional, Tuple
 
+COLUMNS_CATEGORIES = {
+    "cut": ["Fair", "Good", "Very Good", "Ideal", "Premium"],
+    "color": ["D", "E", "F", "G", "H", "I", "J"],
+    "clarity": ["IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "I1"]
+}
+
 DEFAULT_DATA_CONF = {
     "data": {
         "onlineSource": True,
@@ -37,25 +43,11 @@ DEFAULT_DATA_CONF = {
         },
         "toDummy": {
             "active": False,
-            "columns": [
-                "cut",
-                "color",
-                "clarity"
-            ]
+            "columns_categories": COLUMNS_CATEGORIES
         },
         "toOrdinal": {
             "active": False,
-            "columns_categories": {
-                "cut": [
-                    "Fair", "Good", "Very Good", "Ideal", "Premium"
-                ],
-                "color": [
-                    "D", "E", "F", "G", "H", "I", "J"
-                ],
-                "clarity": [
-                    "IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "I1"
-                ]
-            }
+            "columns_categories": COLUMNS_CATEGORIES
         }
     }
 }
@@ -374,6 +366,49 @@ class FileUtils:
                 raise PermissionError(f"Permission denied") from e
         return configuration
 
+    @staticmethod
+    def read_json(file_path: Path, may_not_exist: bool = False) -> Optional[dict]:
+        """Reads the JSON file specified by `file_path`.
+
+        It returns the corresponding dictionary or None if the file does
+        not exist or cannot be read.
+
+        Parameters
+        ----------
+        `file_path` : Path
+            The path to the json file.
+        `may_not_exist` : bool, optional
+            If the file to be read may not exist, by default False.
+
+        Returns
+        -------
+        Optional[dict]
+            The contents of the json file if it could be read, otherwise
+            None.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the specified file does not exist.
+        json.JSONDecodeError
+            If there is an error decoding JSON data.
+        PermissionError
+            If the current user does not have permission to access the
+            file.
+        """
+        try:
+            with open(file_path, 'r') as json_file:
+                return json.load(json_file)
+        except FileNotFoundError as e:
+            if may_not_exist:
+                return None
+            else:
+                raise FileNotFoundError(f"File not found: {file_path}") from e
+        except json.JSONDecodeError as e:
+            raise json.JSONDecodeError(f"Error decoding JSON") from e
+        except PermissionError as e:
+            raise PermissionError(f"Permission denied") from e
+
 class CustomTimedRotatingFileHandler(TimedRotatingFileHandler):
     """Custom subclass of TimedRotatingFileHandler for log file rotation
     and compression.
@@ -547,6 +582,7 @@ class LoggerManager:
 
         # Get the logger with the name 'training'
         logger = logging.getLogger('training')
+        logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 
         # Set severity level
         logger.setLevel(severity_level)
