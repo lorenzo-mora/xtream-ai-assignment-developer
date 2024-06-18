@@ -11,5 +11,14 @@
         "metrics": [
             "mean_squared_error"
         ]
+    },
+    "logger": {
+        "configName": "logger.ini",
+        "name": "train.log",
+        "level": "DEBUG",
+        "maxFiles": 10,
+        "rotateAtTime": "23:59",
+        "formatMessage": "%(asctime)s - [%(name)s:%(filename)s:%(lineno)d] - %(levelname)s: %(message)s",
+        "formatDate": "%Y-%m-%d %H:%M:%S"
     }
 }

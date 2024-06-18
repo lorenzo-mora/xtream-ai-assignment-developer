@@ -23,13 +23,14 @@ import requests
 from sklearn.tree import DecisionTreeRegressor
 
 from utils import (get_config_value, DEFAULT_TRAIN_CONF, DEFAULT_DATA_CONF,
-                   LoggerManager, transform_data, retrieve_config, snake_to_camel)
+                   LoggerManager, transform_data, FileUtils, snake_to_camel)
 
 BASE_PATH = Path(__file__).resolve().parent
 
 class DataManager:
     def __init__(self, config_file: Path, logger: Logger) -> None:
-        self.configuration = retrieve_config(config_file, default_conf=DEFAULT_DATA_CONF)
+        self.configuration = FileUtils.retrieve_config(config_file,
+                                                       default_conf=DEFAULT_DATA_CONF)
         self.logger = logger
 
     # 1. Data Acquisition
@@ -175,8 +176,8 @@ class TrainManager:
                  trining_config_file: Path,
                  data_config_file: Path,
                  logger: Logger) -> None:
-        self.configuration = retrieve_config(trining_config_file,
-                                                  default_conf=DEFAULT_TRAIN_CONF)
+        self.configuration = FileUtils.retrieve_config(trining_config_file,
+                                                       default_conf=DEFAULT_TRAIN_CONF)
         self.logger = logger
 
         # Data Loading Manager
@@ -312,14 +313,15 @@ class TrainManager:
 # 5. Automated Pipeline
 def main():
 
-    logger_config_path = BASE_PATH.joinpath("config/logger.ini")
-    logger_file = BASE_PATH.joinpath('log/training.log')
-    logger_manager = LoggerManager(logger_config_path,
-                                   log_file=logger_file)
-    logger = logger_manager.get_logger(logger_name="training")
+    # logger_config_path = BASE_PATH.joinpath("config/logger.ini")
+    # logger_file = BASE_PATH.joinpath('log/training.log')
+    training_config_file = BASE_PATH.joinpath("config/train_config.json")
+    data_config_file = BASE_PATH.joinpath("config/data_config.json")
+    logger_manager = LoggerManager(config_path=training_config_file)
+    logger = logger_manager.logger
 
-    tm = TrainManager(trining_config_file=Path('xtream-ai-assignment-developer/config/train_config.json'),
-                      data_config_file=Path('xtream-ai-assignment-developer/config/data_config.json'),
+    tm = TrainManager(trining_config_file=training_config_file,
+                      data_config_file=data_config_file,
                       logger=logger)
     tm.train_model()
 

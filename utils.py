@@ -1,12 +1,19 @@
+import configparser
+import datetime as dt
+from datetime import datetime, timedelta
+from io import BytesIO
 import json
 import logging
 import logging.config
+from logging.handlers import TimedRotatingFileHandler
+import tarfile
+import tempfile
 import numpy as np
 from pathlib import Path
 import pandas as pd
 from scipy.stats import zscore
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, PowerTransformer, QuantileTransformer
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 DEFAULT_DATA_CONF = {
     "data": {
@@ -31,20 +38,17 @@ DEFAULT_TRAIN_CONF = {
             "r2_score",
             "mean_absolute_error"
         ]
+    },
+    "logger": {
+        "configName": "logger.ini",
+        "name": "train.log",
+        "level": "DEBUG",
+        "maxFiles": 10,
+        "rotateAtTime": "23:59",
+        "formatMessage": "%(asctime)s - [%(name)s:%(filename)s:%(lineno)d] - %(levelname)s: %(message)s",
+        "formatDate": "%Y-%m-%d %H:%M:%S"
     }
 }
-
-def retrieve_config(configuration_path: Path, default_conf: dict) -> dict:
-    """Retrieve the configuration from the given path. If the
-    configuration file does not exist at the specified path, the default
-    configuration is returned.
-    """
-    if not configuration_path.exists():
-        configuration = default_conf
-    else:
-        with open(configuration_path) as f:
-            configuration = json.load(f)
-    return configuration
 
 def get_config_value(configuration: Dict[str, Any],
                      keys: list,
@@ -196,19 +200,319 @@ def snake_to_camel(snake_str: str) -> str:
     capitalized_words = [word.capitalize() for word in snake_str.split('_')]
     return ' '.join(capitalized_words)
 
+class FileUtils:
+    @staticmethod
+    def resize_tar(archive_path: Path,
+                   num_new_files: int,
+                   archive_file_num_limit: int) -> None:
+        """Reduce the size of the archive by removing the oldest
+        files if the total number of files, including new ones, exceeds
+        the specified limit.
+
+        Parameters
+        ----------
+        `archive_path` : Path
+            The path to the archive to be managed.
+        `num_new_files` : int
+            The number of new files to be added to the archive.
+        `archive_file_num_limit` : int
+            The maximum allowed number of files for the archive.
+
+        Raises
+        ------
+        tarfile.ReadError
+            If there is an error with the tar file operation.
+        """
+        try:
+            if not archive_path.is_file():
+                return
+
+            # Open the archive to check the current number of files
+            with tarfile.open(archive_path, "r:gz") as tar:
+                file_names = tar.getnames()
+                num_files = len(file_names) + num_new_files
+
+                if num_files < archive_file_num_limit:
+                    return
+
+                while num_files >= archive_file_num_limit:
+                    # Get the oldest file in the archive and remove it from
+                    # the archive
+                    oldest_file = min(file_names,
+                                      key=lambda x: tar.getmember(x).mtime)
+                    tar.extract(oldest_file)
+                    file_names.remove(oldest_file)
+                    num_files -= 1
+        except tarfile.ReadError as e:
+            raise tarfile.ReadError(f"Error resizing archive: {e}") from e
+
+    @staticmethod
+    def append_file_to_tar(file_path: Path,
+                           archive_path: Path,
+                           replace: bool = True) -> None:
+        """Append a file to an existing tar gz archive if it is not
+        already present, or if `replace` is True, replace the existing
+        file with the same name.
+
+        Parameters
+        ----------
+        `file_path` : str
+            The path to the file to be added to the archive.
+        `archive_path` : Path
+            The path to the archive to which the new file should be
+            appended.
+        `replace` : bool, optional
+            Whether to replace the file if already present in the
+            archive. By default True.
+
+        Raises
+        ------
+        tarfile.TarError
+            If there is an error with the tar file operation.
+        FileNotFoundError
+            If the file specified by `file_path` does not exist.
+        PermissionError
+            If permission is denied while accessing files or directories.
+        """
+        try:
+            if not archive_path.is_file():
+                return
+
+            file_name = file_path.name
+            with tempfile.TemporaryDirectory(dir=file_path.parent) as tempdir:
+                tmp_path = Path(tempdir).joinpath('{}.gz'.format(archive_path.stem))
+
+                with tarfile.open(archive_path, "r:gz") as tar:
+                    if (not replace and
+                        any(member.name == file_name for member in tar.getmembers())):
+                        return
+
+                    # Read the file to be added
+                    with open(file_path, "rb") as fh:
+                        file_data = BytesIO(fh.read())
+                    tarinfo = tarfile.TarInfo(file_name)
+                    tarinfo.size = len(file_data.getvalue())
+
+                    with tarfile.open(tmp_path, "w:gz") as tmp:
+                        for member in tar:
+                            if member.name != file_name:
+                                tmp.addfile(member, tar.extractfile(member.name))
+                        tmp.addfile(tarinfo, file_data)
+                        file_path.unlink()
+                tmp_path.rename(archive_path)
+        except (tarfile.TarError, FileNotFoundError, PermissionError) as e:
+            raise type(e)(f"Error appending file to archive: {e}") from e
+
+    @staticmethod
+    def retrieve_config(file_path: Path, default_conf: dict) -> dict:
+        """Retrieve the configuration from the given path. If the
+        configuration file does not exist at the specified path, the default
+        configuration is returned.
+        """
+        if not file_path.exists():
+            configuration = default_conf
+        else:
+            try:
+                with open(file_path) as f:
+                    configuration = json.load(f)
+            except json.JSONDecodeError as e:
+                raise json.JSONDecodeError(f"Error decoding JSON") from e
+            except PermissionError as e:
+                raise PermissionError(f"Permission denied") from e
+        return configuration
+
+class CustomTimedRotatingFileHandler(TimedRotatingFileHandler):
+    """Custom subclass of TimedRotatingFileHandler for log file rotation
+    and compression.
+
+    This class extends TimedRotatingFileHandler to perform log file
+    rollover and compress old log files when a rollover occurs.
+    
+    Parameters
+    ----------
+    `filename` : str, optional
+        The filename for the log file, by default "".
+    `when` : str, optional
+        Specifies the type of interval, by default "midnight".
+    `interval` : int, optional
+        Intervals at which rollover occurs, in `when` units. By default 1.
+    `backupCount` : int, optional
+        Number of backup files to keep, by default 14.
+    `atTime` : datetime.time, optional
+        Time of day when rollover occurs, by default None.
+    `encoding` : str, optional
+        The encoding used for the log file, by default "utf-8".
+
+    Methods
+    -------
+    `doRollover()`
+        Performs log file rollover and compresses old log files.
+    """
+    def __init__(self,
+                 filename: str = "",
+                 when: int = "midnight",
+                 interval: int = 1,
+                 backupCount: int = 14,
+                 atTime: Optional[dt.time] = None,
+                 encoding: str = "utf-8"):
+        super().__init__(filename=filename,
+                         when=when,
+                         interval=interval,
+                         backupCount=backupCount,
+                         atTime=atTime,
+                         encoding=encoding)
+
+    def doRollover(self):
+        """Performs log file rollover and compresses old log files into a
+        tar archive.
+
+        This method performs log file rollover by rotating log files
+        based on the configured criteria and compresses old log files
+        into a tar archive to maintain a maximum number of backup files.
+
+        Upon rollover, the method identifies the eligible log files to
+        compress based on the log file naming convention and excludes
+        today's and yesterday's log files. It then checks if a tar
+        archive already exists for older log files. If an archive exists
+        and its file count plus the number of log files to compress
+        exceed the configured maximum backup count, the method
+        iteratively removes the oldest files from the archive until the
+        total file count is within the limit. Finally, the method removes
+        the most recent uncompressed log files after adding them to the
+        archive.
+
+        Note
+        ----
+        The maximum backup count determines the number of log files to
+        retain in the tar archive.
+        If the archive does not exist or is not yet populated with the
+        maximum number of files, the method creates a new archive and
+        adds log files to it.
+
+        Raises
+        ------
+        tarfile.TarError
+            If an error occurs during tar archive operations.
+        FileNotFoundError
+            If the archive or log file cannot be found.
+        PermissionError
+            If the method lacks permission to read or write to files or
+            directories.
+        """
+        super().doRollover()
+        log_dir = Path(self.baseFilename).parent
+        base_filename = Path(self.baseFilename).stem
+
+        # Get the current date and yesterday's date and format them as
+        # YYYY-MM-DD
+        current_date = datetime.now()
+        yesterday_date = current_date - timedelta(days=1)
+        formatted_current_date = current_date.strftime("%Y-%m-%d")
+        formatted_yesterday_date = yesterday_date.strftime("%Y-%m-%d")
+
+        # Get files to compress
+        to_compress = [f for f in log_dir.iterdir()
+                       if f.name.startswith(base_filename)
+                       and f.suffix not in ['.gz', '.log',
+                                            f'.{formatted_current_date}',
+                                            f'.{formatted_yesterday_date}']]
+
+        # Create a tar.gz file for older log files
+        if to_compress:
+            tar_filename = f"{base_filename}-log.tar.gz"
+            archive_path = log_dir.joinpath(tar_filename)
+
+            if archive_path.is_file():
+                # If the current archive exists, check the current number
+                # of files it contains and if this value, increased by
+                # the number of files to be added to the archive, exceeds
+                # the `backupCount`, remove the oldest one; then all new
+                # files to be added
+                FileUtils.resize_tar(archive_path=archive_path,
+                                     num_new_files=len(to_compress),
+                                     archive_file_num_limit=self.backupCount)
+                for f in to_compress:
+                    FileUtils.append_file_to_tar(
+                        file_path=f, archive_path=archive_path, replace=True)
+            else:
+                # The archive does not exist, so the archive is
+                # generated by adding only the most recent log file(s)
+                with tarfile.open(archive_path, "w:gz") as tar:
+                    for f in to_compress:
+                        tar.add(f, arcname=f.name)
+                        f.unlink()  # Remove uncompressed file after archiving
+
 class LoggerManager:
-    def __init__(self, config_file: Path, log_file: Path):
-        self.log_file = log_file
+    """Custom logger configuration class for initializing logger with
+    specific parameters.
 
-        # Check if the configuration file exists or raise an error
-        if not config_file.exists():
-            raise FileNotFoundError(f"The configuration file '{config_file}' does not exist.")
+    This class provides functionality to initialize a logger with
+    parameters loaded from a configuration file and customize log file
+    path, rotation settings, and log message format.
+    """
+    
+    def __init__(self, config_path: Path):
+        self.logger = self._initialize_logger(config_path)
 
-        self._configure_logging(config_file)
+    def _initialize_logger(self, config_path: Path) -> logging.Logger:
+        """Initialize the logger with parameters loaded from the
+        configuration file."""
+        base_path = Path(__file__).resolve().parent
 
-    def _configure_logging(self, config_file: Path):
-        # Load logging configuration from file, pass log_file path as default
-        logging.config.fileConfig(config_file, defaults={'filepath': str(self.log_file)})
+        # Load configuration from config.ini
+        config = FileUtils.retrieve_config(config_path,
+                                           default_conf=DEFAULT_TRAIN_CONF)
 
-    def get_logger(self, logger_name='root'):
-        return logging.getLogger(logger_name)
+        # Get parameters from config
+        log_filename = get_config_value(config,
+                                        ['logger', 'name'],
+                                        DEFAULT_TRAIN_CONF)
+        log_file_path = base_path.joinpath(f"log/{log_filename}")
+        severity_level = get_config_value(config,
+                                          ['logger', 'level'],
+                                          DEFAULT_TRAIN_CONF)
+        max_files = get_config_value(config,
+                                     ['logger', 'maxFiles'],
+                                     DEFAULT_TRAIN_CONF)
+        rtime = get_config_value(config,
+                                 ['logger', 'rotateAtTime'],
+                                 DEFAULT_TRAIN_CONF)
+        rotate_time = datetime.strptime(rtime, '%H:%M').time()
+        msg_format = get_config_value(config,
+                                      ['logger', 'formatMessage'],
+                                      DEFAULT_TRAIN_CONF)
+        date_format = get_config_value(config,
+                                       ['logger', 'formatDate'],
+                                       DEFAULT_TRAIN_CONF)
+
+        # Load logging configuration from logger.ini
+        config_filename = get_config_value(config,
+                                           ['logger', 'configName'],
+                                           DEFAULT_TRAIN_CONF)
+        config_file_path = base_path.joinpath(f"config/{config_filename}")
+        logging.config.fileConfig(config_file_path, disable_existing_loggers=False)
+
+        # Get the logger with the name 'training'
+        logger = logging.getLogger('training')
+
+        # Set severity level
+        logger.setLevel(severity_level)
+
+        # Configure the file handler for rotating log files
+        file_handler = CustomTimedRotatingFileHandler(
+            log_file_path,
+            when='midnight',
+            interval=1,
+            backupCount=max_files,
+            atTime=rotate_time,
+            encoding='utf-8'
+        )
+
+        # Configure the string formatter of the handler for saving the message
+        file_formatter = logging.Formatter(fmt=msg_format, datefmt=date_format, style='%')
+        file_handler.setFormatter(file_formatter)
+
+        # Add the file handler to the logger
+        logger.addHandler(file_handler)
+
+        return logger
