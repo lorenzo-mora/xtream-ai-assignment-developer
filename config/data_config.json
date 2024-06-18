@@ -4,5 +4,41 @@
         "url": "https://raw.githubusercontent.com/xtreamsrl/xtream-ai-assignment-engineer/main/datasets/diamonds/diamonds.csv",
         "localPath": "data/diamonds.csv",
         "saveData": false
+    },
+    "preparation": {
+        "cleanData": {
+            "active": true
+        },
+        "dropColumns": {
+            "active": false,
+            "columns": [
+                "depth",
+                "table",
+                "y",
+                "z"
+            ]
+        },
+        "toDummy": {
+            "active": false,
+            "columns": [
+                "cut",
+                "color",
+                "clarity"
+            ]
+        },
+        "toOrdinal": {
+            "active": true,
+            "columns_categories": {
+                "cut": [
+                    "Fair", "Good", "Very Good", "Ideal", "Premium"
+                ],
+                "color": [
+                    "D", "E", "F", "G", "H", "I", "J"
+                ],
+                "clarity": [
+                    "IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "I1"
+                ]
+            }
+        }
     }
 }

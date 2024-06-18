@@ -1,4 +1,3 @@
-import configparser
 import datetime as dt
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -11,9 +10,10 @@ import tempfile
 import numpy as np
 from pathlib import Path
 import pandas as pd
+from scipy.special import inv_boxcox
 from scipy.stats import zscore
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, PowerTransformer, QuantileTransformer
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 DEFAULT_DATA_CONF = {
     "data": {
@@ -21,18 +21,54 @@ DEFAULT_DATA_CONF = {
         "url": "https://raw.githubusercontent.com/xtreamsrl/xtream-ai-assignment-engineer/main/datasets/diamonds/diamonds.csv",
         "localPath": "data/diamonds.csv",
         "saveData": False
+    },
+    "preparation": {
+        "cleanData": {
+            "active": False
+        },
+        "dropColumns": {
+            "active": False,
+            "columns": [
+                "depth",
+                "table",
+                "y",
+                "z"
+            ]
+        },
+        "toDummy": {
+            "active": False,
+            "columns": [
+                "cut",
+                "color",
+                "clarity"
+            ]
+        },
+        "toOrdinal": {
+            "active": False,
+            "columns_categories": {
+                "cut": [
+                    "Fair", "Good", "Very Good", "Ideal", "Premium"
+                ],
+                "color": [
+                    "D", "E", "F", "G", "H", "I", "J"
+                ],
+                "clarity": [
+                    "IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "I1"
+                ]
+            }
+        }
     }
 }
 
 DEFAULT_TRAIN_CONF = {
     "training": {
         "testSize": 0.2,
+        "randomState": None,
         "transformation": None,
         "processingData": True,
         "model": {
             "name": "linear_regression",
-            "parameters": {},
-            "save_path": ""
+            "parameters": {}
         },
         "metrics":[
             "r2_score",
@@ -102,7 +138,8 @@ def get_config_value(configuration: Dict[str, Any],
 
     return conf_value if conf_value else default_value
 
-def transform_data(data: pd.Series, transformation: str) -> pd.Series:
+def transform_data(data: pd.Series,
+                   transformation: str) -> Tuple[pd.Series, Any]:
     """Apply a specified transformation to a pandas Series.
 
     Parameters
@@ -125,69 +162,73 @@ def transform_data(data: pd.Series, transformation: str) -> pd.Series:
 
     Returns
     -------
-    pd.Series
-        The transformed data as a pandas Series.
+    tuple
+        The transformed data as a pandas Series and the fitted
+        parameters required for the inverse transformation.
 
     Raises
     ------
     ValueError
         If the specified transformation is not recognized.
-
-    Examples
-    --------
-    >>> import pandas as pd
-    >>> data = pd.Series([1, 2, 3, 4, 5])
-    >>> transform_data(data, 'log')
-    0    0.000000
-    1    0.693147
-    2    1.098612
-    3    1.386294
-    4    1.609438
-    dtype: float64
-    >>> transform_data(data, 'standardisation')
-    0   -1.414214
-    1   -0.707107
-    2    0.000000
-    3    0.707107
-    4    1.414214
-    dtype: float64
-    >>> transform_data(data, 'min-max scaling')
-    0    0.00
-    1    0.25
-    2    0.50
-    3    0.75
-    4    1.00
-    dtype: float64
-    >>> transform_data(data, 'nonexistent')
-    Traceback (most recent call last):
-        ...
-    ValueError: Unknown transformation 'nonexistent'
     """
     if transformation is None or transformation == "":
-        return data  # Return original data if no transformation is specified
+        return data, None  # Return original data if no transformation is specified
 
-    transformations = {
-        "log": lambda x: np.log(x),
-        "standardisation": lambda x: StandardScaler().fit_transform(
-            x.values.reshape(-1, 1)).flatten(),
-        "min_max_scaling": lambda x: MinMaxScaler().fit_transform(
-            x.values.reshape(-1, 1)).flatten(),
-        "power": lambda x: PowerTransformer(method='box-cox').fit_transform(
-            x.values.reshape(-1, 1)).flatten(),
-        "square_root": lambda x: np.sqrt(x),
-        "exponential": lambda x: np.exp(x),
-        "tanh": lambda x: np.tanh(x),
-        "z_score": lambda x: zscore(x),
-        "johnson": lambda x: QuantileTransformer(output_distribution='normal').fit_transform(
-            x.values.reshape(-1, 1)).flatten()
+    transformers = {
+        "log": lambda x: (np.log(x), None),
+        "standardisation": lambda x: (
+            StandardScaler().fit_transform(x.values.reshape(-1, 1)).flatten(),
+            StandardScaler().fit(x.values.reshape(-1, 1))
+        ),
+        "min_max_scaling": lambda x: (
+            MinMaxScaler().fit_transform(x.values.reshape(-1, 1)).flatten(),
+            MinMaxScaler().fit(x.values.reshape(-1, 1))
+        ),
+        "power": lambda x: (
+            PowerTransformer(method='box-cox').fit_transform(x.values.reshape(-1, 1)).flatten(),
+            PowerTransformer(method='box-cox').fit(x.values.reshape(-1, 1))
+        ),
+        "square_root": lambda x: (np.sqrt(x), None),
+        "exponential": lambda x: (np.exp(x), None),
+        "tanh": lambda x: (np.tanh(x), None),
+        "z_score": lambda x: (zscore(x), (np.mean(x), np.std(x))),
+        "johnson": lambda x: (
+            QuantileTransformer(output_distribution='normal').fit_transform(x.values.reshape(-1, 1)).flatten(),
+            QuantileTransformer(output_distribution='normal').fit(x.values.reshape(-1, 1))
+        )
     }
 
-    if transformation in transformations:
-        return pd.Series(transformations[transformation](data), index=data.index)
+    if transformation in transformers:
+        transformed_data, fitted_params = transformers[transformation](data)
+        return pd.Series(transformed_data, index=data.index), fitted_params
     else:
         raise ValueError(f"Unknown transformation '{transformation}'")
 
-def snake_to_camel(snake_str: str) -> str:
+def inverse_transform_data(data: pd.Series,
+                           transformation: str,
+                           fitted_params: Any) -> pd.Series:
+    """Apply the inverse of a specified transformation to a pandas Series."""
+    inverse_transformers = {
+        "log": lambda x: np.exp(x),
+        "standardisation": lambda x: fitted_params.inverse_transform(x.values.reshape(-1, 1)).flatten(),
+        "min_max_scaling": lambda x: fitted_params.inverse_transform(x.values.reshape(-1, 1)).flatten(),
+        "power": lambda x: inv_boxcox(x, fitted_params.lambdas_),
+        "square_root": lambda x: np.square(x),
+        "exponential": lambda x: np.log(x),
+        "tanh": lambda x: np.arctanh(x),
+        "z_score": lambda x: x * fitted_params[1] + fitted_params[0],
+        "johnson": lambda x: fitted_params.inverse_transform(x.values.reshape(-1, 1)).flatten()
+    }
+
+    if transformation is None or transformation == "":
+        return data
+
+    if transformation in inverse_transformers:
+        return pd.Series(inverse_transformers[transformation](data), index=data.index)
+    else:
+        raise ValueError(f"Unknown transformation '{transformation}'")
+
+def snake_to_camel(snake_str: Optional[str]) -> Optional[str]:
     """Convert a snake_case string to Camel Case.
     
     Examples
@@ -197,6 +238,8 @@ def snake_to_camel(snake_str: str) -> str:
     >>> snake_to_camel('convert_this_string')
     'Convert This String'
     """
+    if not snake_str:
+        return snake_str
     capitalized_words = [word.capitalize() for word in snake_str.split('_')]
     return ' '.join(capitalized_words)
 

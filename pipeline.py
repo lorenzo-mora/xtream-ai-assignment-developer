@@ -4,8 +4,9 @@ from logging import Logger
 from pathlib import Path
 import tempfile
 import time
-from typing import Any, List, Tuple
+from typing import Any, List, Optional, Tuple
 import uuid
+import optuna
 import pandas as pd
 from sklearn.ensemble import (AdaBoostRegressor, GradientBoostingRegressor,
                               RandomForestRegressor)
@@ -21,9 +22,10 @@ from sklearn.svm import SVR
 import joblib
 import requests
 from sklearn.tree import DecisionTreeRegressor
+from xgboost import XGBRegressor
 
 from utils import (get_config_value, DEFAULT_TRAIN_CONF, DEFAULT_DATA_CONF,
-                   LoggerManager, transform_data, FileUtils, snake_to_camel)
+                   LoggerManager, inverse_transform_data, transform_data, FileUtils, snake_to_camel)
 
 BASE_PATH = Path(__file__).resolve().parent
 
@@ -35,10 +37,10 @@ class DataManager:
 
     # 1. Data Acquisition
     def fetch_data(self) -> Tuple[pd.DataFrame, str]:
-        fetch_from_url = get_config_value(self.configuration,
+        self.fetch_from_url = get_config_value(self.configuration,
                                           ['data', 'onlineSource'],
                                           DEFAULT_DATA_CONF)
-        if fetch_from_url:
+        if self.fetch_from_url:
             # The data are to be downloaded online
             source_path = get_config_value(self.configuration,
                                            ['data', 'url'],
@@ -51,7 +53,7 @@ class DataManager:
         self.logger.info(f"Acquiring data from '{source_path}'")
 
         data = (self._fetch_from_online(url=source_path)
-                if fetch_from_url else self._fetch_from_local(path_to_data=source_path))
+                if self.fetch_from_url else self._fetch_from_local(path_to_data=source_path))
 
         return data, source_path.rsplit('/', 1)[-1]
 
@@ -98,10 +100,42 @@ class DataManager:
     def preprocess_data(self, original_data: pd.DataFrame) -> pd.DataFrame:
         self.logger.info("Starting data processing...")
 
+        # Retrieve operations from config
+        self.is_2b_clean = get_config_value(self.configuration,
+                                       ['preparation', 'cleanData', 'active'],
+                                       DEFAULT_DATA_CONF)
+        self.is_2b_reduced = get_config_value(self.configuration,
+                                         ['preparation', 'dropColumns', 'active'],
+                                         DEFAULT_DATA_CONF)
+        self.is_2b_converted_dummy = get_config_value(self.configuration,
+                                                 ['preparation', 'toDummy', 'active'],
+                                                 DEFAULT_DATA_CONF)
+        self.is_2b_converted_ordinal = get_config_value(self.configuration,
+                                                   ['preparation', 'toOrdinal', 'active'],
+                                                   DEFAULT_DATA_CONF)
+
+        # Apply the operations specified in the configuration
         processed_data = original_data.copy()
-        processed_data = self._clean_data(processed_data)
-        processed_data = self._drop_columns(processed_data)
-        processed_data = self._convert_categorical(processed_data)
+        if self.is_2b_clean:
+            processed_data = self._clean_data(processed_data)
+        if self.is_2b_reduced:
+            drop_columns = get_config_value(
+                self.configuration, ['preparation', 'dropColumns', 'columns'],
+                DEFAULT_DATA_CONF)
+            processed_data = self._drop_columns(processed_data,
+                                                columns_to_drop=drop_columns)
+        if self.is_2b_converted_dummy:
+            convert_to_dummies = get_config_value(
+                self.configuration, ['preparation', 'toDummy', 'columns'],
+                DEFAULT_DATA_CONF)
+            processed_data = self._categorical_to_dummy(
+                processed_data, columns_to_convert=convert_to_dummies)
+        if self.is_2b_converted_ordinal:
+            convert_to_ordinal = get_config_value(
+                self.configuration, ['preparation', 'toOrdinal', 'columns_categories'],
+                DEFAULT_DATA_CONF)
+            processed_data = self._categorical_to_ordinal(
+                processed_data, columns_categories=convert_to_ordinal)
 
         # Is it required to save the processed data?
         save = get_config_value(self.configuration,
@@ -132,18 +166,30 @@ class DataManager:
                 f"Removed {removed_count} instances with zero volume or non-positive prices")
         return data
 
-    def _drop_columns(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _drop_columns(self, data: pd.DataFrame, columns_to_drop: list) -> pd.DataFrame:
         """Drop columns that are not useful for the model."""
-        columns_to_drop = ['depth', 'table', 'y', 'z']
         data = data.drop(columns=columns_to_drop)
         self.logger.debug(f"Dropped columns: {columns_to_drop}")
         return data
     
-    def _convert_categorical(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _categorical_to_dummy(self,
+                              data: pd.DataFrame,
+                              columns_to_convert: list) -> pd.DataFrame:
         """Convert categorical variables into dummy variables."""
-        categorical_columns = ['cut', 'color', 'clarity']
-        data = pd.get_dummies(data, columns=categorical_columns, drop_first=True)
-        self.logger.debug(f"Converted categorical columns into dummies: {categorical_columns}")
+        data = pd.get_dummies(data, columns=columns_to_convert, drop_first=True)
+        self.logger.debug(
+            f"Converted categorical columns into dummies: {columns_to_convert}")
+        return data
+
+    def _categorical_to_ordinal(self,
+                                data: pd.DataFrame,
+                                columns_categories: dict) -> pd.DataFrame:
+        """Convert categorical variables into ordinal variables."""
+        for col, cats in columns_categories.items():
+            data[col] = pd.Categorical(data[col], categories=cats, ordered=True)
+
+        self.logger.debug(
+            f"Converted categorical columns into ordinal: {list(columns_categories.keys())}")
         return data
 
 class TrainManager:
@@ -159,7 +205,8 @@ class TrainManager:
         "naive_bayes": (GaussianNB, {}),
         "knn": (KNeighborsRegressor, {}),
         "random_forest": (RandomForestRegressor, {"n_estimators": 100}),
-        "gradient_boosting": (GradientBoostingRegressor, {"max_depth": 3}),
+        "gradient_boosting": (GradientBoostingRegressor, {}),
+        "xgb_regressor": (XGBRegressor, {}),
         "ada_boosting": (AdaBoostRegressor, {})
     }
 
@@ -185,109 +232,176 @@ class TrainManager:
 
         self.training_uuid = str(uuid.uuid4())
         self.history = {
-            "id_": self.training_uuid
+            "id": self.training_uuid
             }
         self.logger.info(f"Training instance {self.training_uuid}")
 
-    def data_generation(self) -> List[pd.Series]:
+        self._retrieve_configuration()
+
+        self.X_train, self.X_val, self.y_train, self.y_val = self._data_generation()
+
+    def run(self, model_parameters: dict = {}):
+        self.logger.info("Performing model training")
+        results = self._train_model(model_parameters)
+
+        # Update of current training history
+        self.history['modelType'] = snake_to_camel(self.model_name)
+        self.history['parameters'] = self.model_params
+        self.history['evaluationMetrics'] = results
+
+        self._save_training()
+
+    def grid_search(self):
+        self.logger.info(
+            f"A Bayesian tuning of {self.number_of_trials} trials of the "
+            f"model's hyperparameters is performed: {self.study_name}")
+        start_study = time.time()
+        study = optuna.create_study(direction='minimize',
+                                    study_name=self.study_name)
+        study.optimize(self._objective, n_trials=self.number_of_trials)
+        delta_study = time.time() - start_study
+        self.logger.debug(f"Bayesian research lasted {round(delta_study, 4)} seconds")
+
+        self.logger.debug(f"The optimal hyperparameters are: {study.best_params}")
+        self.run(model_parameters=study.best_params)
+
+    def _retrieve_configuration(self) -> None:
+        """Retrieve the model configuration from the config file."""
+
+        self.logger.info(
+            f"Retrieving the model configuration for training {self.training_uuid}")
+
+        # Name of the class model
+        self.model_name = get_config_value(
+            self.configuration, ['training', 'model', 'name'], DEFAULT_TRAIN_CONF)
+        self.logger.debug(
+            f"The model to be trained is: {snake_to_camel(self.model_name)}")
+
+        # Training parameters
+        self.config_model_params = get_config_value(
+            self.configuration, ['training', 'model', 'parameters'], DEFAULT_TRAIN_CONF)
+
+        # If it is necessary to process data
+        self.to_process = get_config_value(
+            self.configuration, ['training', 'processingData'], DEFAULT_TRAIN_CONF)
+
+        # Test size for the training
+        self.split_size = get_config_value(
+            self.configuration, ['training', 'testSize'], DEFAULT_TRAIN_CONF)
+        self.logger.debug(f"Using test size: {self.split_size}")
+
+        # Random state for the training
+        self.random_state = get_config_value(
+            self.configuration, ['training', 'randomState'], DEFAULT_TRAIN_CONF)
+
+        # Training data transformation
+        self.transformation = get_config_value(
+            self.configuration, ['training', 'transformation'], DEFAULT_TRAIN_CONF)
+
+        # Training evaluation metrics
+        self.metrics = get_config_value(
+            self.configuration, ['training', 'metrics'], DEFAULT_TRAIN_CONF)
+        
+        # If the hyperparameters optimisation is required
+        self.optimize_model = get_config_value(
+            self.configuration, ['training', 'tuning', 'active'], DEFAULT_TRAIN_CONF)
+        if self.optimize_model:
+            # The number of trials to be carried out for the search
+            self.number_of_trials = get_config_value(
+                self.configuration, ['training', 'tuning', 'trialsNumber'], DEFAULT_TRAIN_CONF)
+            # The number of trials to be carried out for the search
+            self.study_name = get_config_value(
+                self.configuration, ['training', 'tuning', 'studyName'], DEFAULT_TRAIN_CONF)
+
+    def _data_generation(self) -> List[pd.Series]:
         data, dataframe_name = self.dm.fetch_data()
-        to_process = get_config_value(self.configuration,
-                                      ['training', 'processingData'],
-                                      DEFAULT_TRAIN_CONF)
-        if to_process:
+
+        if self.to_process:
             data = self.dm.preprocess_data(data)
 
         # Separate features and target variable
         X = data.drop(columns='price')
         y = data['price']
 
-        # Apply the transformation specified in configuration
-        transformation = get_config_value(self.configuration,
-                                          ['training', 'transformation'],
-                                          DEFAULT_TRAIN_CONF)
-        try:
-            y = transform_data(y, transformation)
-            self.logger.info(
-                f"{snake_to_camel(transformation)} transformation was applied to the data")
-        except Exception as e:
-            self.logger.error(f"The transformation {snake_to_camel(transformation)} "
-                              f"could not be applied to the target data: {e}")
-
-        # Get the test size from configuration
-        split_size = get_config_value(self.configuration,
-                                      ['training', 'testSize'],
-                                      DEFAULT_TRAIN_CONF)
-        self.logger.debug(f"Using test size: {split_size}")
-
         self.logger.info("Data processing operation successfully completed.")
+
+        X_train, X_val, y_train, y_val = train_test_split(
+            X, y, test_size=self.split_size, random_state=self.random_state)
+
+        # Apply the transformation specified in configuration
+        transformation_name = snake_to_camel(self.transformation)
+        try:
+            y_train, self.fitted_parameters = transform_data(y_train,
+                                                             self.transformation)
+            info_msg = "{} transformation was applied to the data".format(
+                transformation_name if self.transformation else 'No')
+            self.logger.info(info_msg)
+        except Exception as e:
+            self.logger.error(f"The transformation {transformation_name} "
+                              f"could not be applied to the target data: {e}")
 
         # Update of current training history
         self.history['ts'] = datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
-        self.history['data'] = dataframe_name
-        self.history['transformation'] = transformation
-        self.history['splitSize'] = split_size
+        self.history['data'] = {
+            'name': dataframe_name,
+            'onlineSource': self.dm.fetch_from_url,
+            'clean': self.dm.is_2b_clean,
+            'reduced': self.dm.is_2b_reduced,
+            'dummy': self.dm.is_2b_converted_dummy,
+            'ordinal': self.dm.is_2b_converted_ordinal
+            }
+        self.history['transformation'] = transformation_name
+        self.history['splitSize'] = self.split_size
 
-        return train_test_split(X, y, test_size=split_size, random_state=42)
+        return X_train, X_val, y_train, y_val
 
     # 3. Model Training
-    def train_model(self) -> None:
-        X_train, X_val, y_train, y_val = self.data_generation()
+    def _train_model(self, model_parameters: dict = {}) -> dict:
 
-        model_name = get_config_value(self.configuration,
-                                      ['training', 'model', 'name'],
-                                      DEFAULT_TRAIN_CONF)
-        model_params = get_config_value(self.configuration,
-                                        ['training', 'model', 'parameters'],
-                                        DEFAULT_TRAIN_CONF)
-        self.logger.debug(f"For {self.training_uuid} training, the "
-                          f"{snake_to_camel(model_name)} model is used.")
+        model_class, default_params = self.MODEL_MAPPING[self.model_name]
 
-        model_class, default_params = self.MODEL_MAPPING[model_name]
-
-        # Merge default parameters with specified parameters
-        if model_params is None:
-            model_params = {}
-        params = {**default_params, **model_params}
+        # Merge the input parameters with those specified in the file
+        # and the default parameters
+        self.model_params = {**default_params,
+                             **self.config_model_params,
+                             **model_parameters}
 
         # Training the model
-        self.logger.info("Start the model training")
-        model = model_class(**params)
+        self.logger.info(
+            "Starting the model training with configuration: {}".format(
+                self.model_params if self.model_params else 'standard'))
+        self.model = model_class(**self.model_params)
         start_train = time.time()
-        model.fit(X_train, y_train)
+        self.model.fit(self.X_train, self.y_train)
         delta_train = time.time() - start_train
-        self.logger.debug(f"The training lasted for {delta_train} seconds")
+        self.logger.debug(f"The training lasted for {round(delta_train, 4)} seconds")
 
         # Evaluate the trained model
-        self.logger.info("Evaluation of model training")
-        evaluation_results = self.evaluate_model(model, X_val, y_val)
+        evaluation_results = self._evaluate_model()
         self.logger.info(f"MAE: {evaluation_results['mean_absolute_error']}")
 
-        # Update of current training history
-        self.history['evaluation_metrics'] = evaluation_results
-
-        self.save_training(model, results=self.history)
+        return evaluation_results
 
     # 4. Model Evaluation
-    def evaluate_model(self, model: Any, X_val: pd.Series, y_val: pd.Series) -> dict:
-        y_pred = model.predict(X_val)
+    def _evaluate_model(self) -> dict:
+        y_pred = self.model.predict(self.X_val)
+        y_pred = inverse_transform_data(pd.Series(y_pred),
+                                        self.transformation,
+                                        self.fitted_parameters)
 
-        metrics = get_config_value(self.configuration,
-                                   ['training', 'metrics'],
-                                   DEFAULT_TRAIN_CONF)
-
-        if "mean_absolute_error" not in metrics:
+        if "mean_absolute_error" not in self.metrics:
             # The MAE is always calculated
-            metrics.append("mean_absolute_error")
+            self.metrics.append("mean_absolute_error")
 
         results = {}
-        for metric_name in metrics:
+        for metric_name in self.metrics:
             if metric_name not in self.METRIC_MAPPING:
                 continue
             metric_func, params = self.METRIC_MAPPING[metric_name]
-            results[metric_name] = metric_func(y_val, y_pred, **params)
+            results[metric_name] = metric_func(self.y_val, y_pred, **params)
         return results
     
-    def save_training(self, model: Any, results: dict) -> None:
+    def _save_training(self) -> None:
         # Read previous results
         stored_history = {'training': []}
         train_folder = BASE_PATH.joinpath('train')
@@ -299,7 +413,7 @@ class TrainManager:
                 stored_history = json.load(f)
 
         # Update current results with past results and saves the new history
-        stored_history['training'].append(results)
+        stored_history['training'].append(self.history)
         with open(train_result, 'w', encoding='utf-8') as f:
             json.dump(stored_history, f, ensure_ascii=False, indent=4)
 
@@ -308,7 +422,26 @@ class TrainManager:
         if not models_folder.exists():
             models_folder.mkdir(parents=False)
         model_name = f'model_{self.training_uuid}'
-        joblib.dump(model, f'{models_folder}/{model_name}.pkl')
+        joblib.dump(self.model, f'{models_folder}/{model_name}.pkl')
+        self.logger.info("Saved all data")
+
+    def _objective(self, trial: optuna.trial.Trial) -> float:
+        epoch_params = TrainManager.process_parameters(self.config_model_params, trial)
+        results = self._train_model(epoch_params)
+        return results['mean_absolute_error']
+
+    @staticmethod
+    def process_parameters(params: dict, trial: optuna.trial.Trial) -> dict:
+        processed_params = {}
+        for key, value in params.items():
+            if (isinstance(value, str) and
+                (value.startswith("self.trial.") or
+                 value.startswith("trial."))):
+                method_call = value.replace("self.trial.", "trial.")
+                processed_params[key] = eval(method_call)
+            else:
+                processed_params[key] = value
+        return processed_params
 
 # 5. Automated Pipeline
 def main():
@@ -323,7 +456,7 @@ def main():
     tm = TrainManager(trining_config_file=training_config_file,
                       data_config_file=data_config_file,
                       logger=logger)
-    tm.train_model()
+    tm.grid_search()
 
 if __name__ == "__main__":
     main()
