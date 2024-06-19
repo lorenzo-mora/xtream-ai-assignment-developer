@@ -1,5 +1,6 @@
 from pathlib import Path
 import pickle
+import sys
 from typing import Any, List, Optional, Tuple
 from fastapi import HTTPException
 import joblib
@@ -7,10 +8,12 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cosine
 
+BASE_PATH = Path(__file__).resolve().parents[1]
+sys.path.append(str(BASE_PATH))
+
 from training_model import DataManager
 from utils import FileUtils, COLUMNS_CATEGORIES, inverse_transform_data
 
-BASE_PATH = Path(__file__).resolve().parent
 TRAINING_PATH = BASE_PATH.joinpath("train")
 MODELS_PATH = TRAINING_PATH.joinpath("models")
 DATA_PATH = BASE_PATH.joinpath("data")
@@ -20,7 +23,7 @@ def retrieve_metadata() -> List[dict]:
     try:
         models = FileUtils.read_json(TRAINING_PATH.joinpath("results.json"),
                                      may_not_exist=False)
-    except Exception as e:
+    except Exception:
         raise
     # Retrieve metadata of the model
     return models['training']
