@@ -1,5 +1,5 @@
-from typing import Dict, Literal, Optional
-from pydantic import BaseModel, root_validator
+from typing import Optional
+from pydantic import BaseModel
 
 class DiamondFeatures(BaseModel):
     model: Optional[str] = "19349c13-b711-4440-b669-ed9b199ad5e3"

@@ -116,7 +116,7 @@ def check_features_values(features: dict,
                 }
             ])
 
-    # Check that the specified method is correct
+    # Check the existence of the specified dataset 'dataset_name'
     if ('dataset_name' in features and
         not DATA_PATH.joinpath(features['dataset_name']).exists()):
         raise HTTPException(status_code=400, detail=[
@@ -227,8 +227,8 @@ def cosine_similarity(weight1: float, weight2: float) -> float:
 def calculate_similarity(similarity_type: str,
                          weight1: float,
                          weight2: float,
-                         mean: float = None,
-                         std : float = None):
+                         mean: Optional[float] = None,
+                         std : Optional[float] = None) -> float:
     similarity_functions = {
         "absolute difference": absolute_difference,
         "relative difference": relative_difference,
@@ -262,17 +262,21 @@ def find_similar_samples(features: dict):
     n = features['n']
     method = features['method']
     data_name = features['dataset_name']
-    
+
+    # Loading the specified dataset
     data = load_data(DATA_PATH.joinpath(data_name))
 
+    # Limit the dataset to those diamonds that have the same cut, colour
+    # and clarity as the request
     filtered_data = data[
         (data['cut'].str.lower() == features['cut'].lower()) &
         (data['color'].str.lower() == features['color'].lower()) &
         (data['clarity'].str.lower() == features['clarity'].lower())
     ]
+
+    # Calculating the similarity with respect to the weight of diamonds
     diamond_weights = filtered_data['carat']
     given_weight = float(features['carat'])
-
     method = method.lower()
     if method == "z score":
         mean_weight = np.mean(diamond_weights)
@@ -285,5 +289,6 @@ def find_similar_samples(features: dict):
     weight_diff = "_".join(method.split())
     filtered_data[weight_diff] = differences
 
+    # Retrieve the most similar n
     similar_samples = filtered_data.nsmallest(n, weight_diff)
     return similar_samples.to_dict(orient='records')
