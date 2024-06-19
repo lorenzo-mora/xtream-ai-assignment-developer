@@ -16,7 +16,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler, PowerTransformer
 from typing import Any, Dict, List, Optional, Tuple
 
 COLUMNS_CATEGORIES = {
-    "cut": ["Fair", "Good", "Very Good", "Ideal", "Premium"],
+    "cut": ["FAIR", "GOOD", "VERY GOOD", "IDEAL", "PREMIUM"],
     "color": ["D", "E", "F", "G", "H", "I", "J"],
     "clarity": ["IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "I1"]
 }
@@ -188,11 +188,11 @@ def transform_data(data: pd.Series,
         ),
         "power": lambda x: (
             PowerTransformer(method='box-cox').fit_transform(x.values.reshape(-1, 1)).flatten(),
-            PowerTransformer(method='box-cox').fit(x.values.reshape(-1, 1))
+            PowerTransformer(method='box-cox').fit(x.values.reshape(-1, 1)) # Some issues
         ),
         "square_root": lambda x: (np.sqrt(x), None),
-        "exponential": lambda x: (np.exp(x), None),
-        "tanh": lambda x: (np.tanh(x), None),
+        "exponential": lambda x: (np.exp(x), None), # Some issues
+        "tanh": lambda x: (np.tanh(x), None), # Some issues
         "z_score": lambda x: (zscore(x), (np.mean(x), np.std(x))),
         "johnson": lambda x: (
             QuantileTransformer(output_distribution='normal').fit_transform(x.values.reshape(-1, 1)).flatten(),

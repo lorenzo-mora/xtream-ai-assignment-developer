@@ -194,7 +194,7 @@ class DataManager:
         for column, values in columns_categories.items():
             # Create dummy variables for the specified values
             for value in values:
-                data[f"{column}_{value}"] = (data[column] == value).astype(int)
+                data[f"{column}_{value}"] = (data[column].str.upper() == value).astype(int)
             # Drop the original column if needed
             data = data.drop(column, axis=1)
         return data
@@ -204,7 +204,7 @@ class DataManager:
                                 columns_categories: dict) -> pd.DataFrame:
         """Convert categorical variables into ordinal variables."""
         for col, cats in columns_categories.items():
-            data[col] = pd.Categorical(data[col], categories=cats, ordered=True)
+            data[col] = pd.Categorical(data[col].str.upper(), categories=cats, ordered=True)
         return data
 
 class TrainManager:
@@ -384,12 +384,14 @@ class TrainManager:
                               f"could not be applied to the target data: {e}")
 
         # Saving the fitted transformer model
-        if any(isinstance(self.fitted_parameters, t_class)
-               for t_class in [StandardScaler, MinMaxScaler,
-                               PowerTransformer, QuantileTransformer]):
+        if (self.fitted_parameters is not None and
+            (any(isinstance(self.fitted_parameters, t_class)
+                 for t_class in [StandardScaler, MinMaxScaler,
+                                 PowerTransformer, QuantileTransformer]) or
+             self.transformation == "z_score")):
             dest_path = BASE_PATH.joinpath('train/transformer')
             model_name = f"transformer_{self.training_uuid}"
-            joblib.dump(self.model, f'{dest_path}/{model_name}.pkl')
+            joblib.dump(self.fitted_parameters, f'{dest_path}/{model_name}.pkl')
 
         # Update of current training history
         self.history['ts'] = datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")

@@ -10,7 +10,7 @@
             "active": true
         },
         "dropColumns": {
-            "active": false,
+            "active": true,
             "columns": [
                 "depth",
                 "table",
@@ -19,10 +19,10 @@
             ]
         },
         "toDummy": {
-            "active": false,
+            "active": true,
             "columns_categories": {
                 "cut": [
-                    "Fair", "Good", "Very Good", "Ideal", "Premium"
+                    "FAIR", "GOOD", "VERY GOOD", "IDEAL", "PREMIUM"
                 ],
                 "color": [
                     "D", "E", "F", "G", "H", "I", "J"
@@ -33,10 +33,10 @@
             }
         },
         "toOrdinal": {
-            "active": true,
+            "active": false,
             "columns_categories": {
                 "cut": [
-                    "Fair", "Good", "Very Good", "Ideal", "Premium"
+                    "FAIR", "GOOD", "VERY GOOD", "IDEAL", "PREMIUM"
                 ],
                 "color": [
                     "D", "E", "F", "G", "H", "I", "J"
