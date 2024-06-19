@@ -68,4 +68,228 @@ Observability is key. Save every request and response made to the APIs to a **pr
 ---
 
 ## How to run
-Please fill this section as part of the assignment.
+To train a specific model, simply run the command from the shell:
+```
+python training_model.py
+```
+
+This command will parse the 3 configuration files specified in the *config* folder. Of particular relevance are `data_config.json`, for information on which data to use and how to process it, and `train_config.json`, for the configuration of model training.
+
+### Structure of Configurations
+The file structure is well-defined and must comply with the following schemes.
+
+#### data_config.json
+To use this configuration, ensure that the dataset source and preparation steps are correctly specified according to the requirements. Adjust the active flags and columns/categories as needed to fit the specific needs of your analysis or machine learning workflow.
+
+1. **data** &rarr; This section contains information about the source and handling of the dataset.
+
+    * **onlineSource** [*bool*]: A boolean value indicating whether the dataset should be downloaded from an online source:
+        * `true`: The dataset will be downloaded from the specified URL.
+        * `false`: The dataset will be loaded from a local file path.
+
+    * **url** [*string*]: The URL of the dataset if *onlineSource* is `true`.
+
+    * **localPath** [*string*]: The local file path to the dataset if *onlineSource* is `false`.
+
+    * **saveData** [*bool*]: A boolean value indicating whether to save the downloaded or processed data locally.
+        * `true`: The data will be saved locally.
+        * `false`: The data will not be saved.
+
+2. **preparation** &rarr; This section details the steps for preparing the dataset.
+
+    > **cleanData**
+    * **active** [*bool*]: A boolean value indicating whether data cleaning should be performed.
+        * `true`: Data cleaning will be performed.
+        * `false`: Data cleaning will not be performed.
+
+    > **dropColumns**
+    * **active** [*bool*]: A boolean value indicating whether certain columns should be dropped from the dataset.
+        * `true`: The specified columns will be dropped.
+        * `false`: The specified columns will not be dropped.
+
+    * **columns** [*list*]: An array of column names to be dropped from the dataset. Example columns include `depth`, `table`, `y`, and `z`.
+
+    > **toDummy**
+    * **active** [*bool*]: A boolean value indicating whether to convert categorical columns to dummy variables.
+        * `true`: The specified categorical columns will be converted to dummy variables.
+        * `false`: The specified categorical columns will not be converted to dummy variables.
+
+    * **columns_categories** [*dict*]: An object specifying the categorical columns and their categories to be converted to dummy variables.
+        * **cut** [*list*]: Categories include `Fair`, `Good`, `Very Good`, `Ideal`, and `Premium`.
+        * **color** [*list*]: Categories include `D`, `E`, `F`, `G`, `H`, `I`, and `J`.
+        * **clarity** [*list*]: Categories include `IF`, `VVS1`, `VVS2`, `VS1`, `VS2`, `SI1`, `SI2`, and `I1`.
+
+    > **toOrdinal**
+    * **active** [*bool*]: A boolean value indicating whether to convert categorical columns to ordinal variables.
+        * `true`: The specified categorical columns will be converted to ordinal variables.
+        * `false`: The specified categorical columns will not be converted to ordinal variables.
+
+    * **columns_categories** [*dict*]: An object specifying the categorical columns and their categories to be converted to ordinal variables.
+        * **cut** [*list*]: Categories include `Fair`, `Good`, `Very Good`, `Ideal`, and `Premium`.
+        * **color** [*list*]: Categories include `D`, `E`, `F`, `G`, `H`, `I`, and `J`.
+        * **clarity** [*list*]: Categories include `IF`, `VVS1`, `VVS2`, `VS1`, `VS2`, `SI1`, `SI2`, and `I1`.
+
+#### train_config.json
+To use this configuration, ensure that the training parameters, model settings, and logging configurations are correctly specified according to the requirements. Adjust the active flags, hyperparameters, and logging details as needed to fit the specific needs of your machine learning workflow.
+
+1. **Training** &rarr; This section contains parameters and settings related to the training process.
+
+    * **testSize** [*float*]: The proportion of the dataset to include in the test split. For example, 0.2 indicates that 20% of the data will be used for testing.
+
+    * **randomState** [*int*]: The seed used by the random number generator to ensure reproducibility. For example, 42 is a commonly used seed value.
+
+    * **transformation** [*string*]: Specifies any transformation to be applied to the data before training. In the default configuration it is set to null, indicating that there is no transformation. It may be chosen from one of:
+        * `null`
+        * `"log"`
+        * `"standardisation"`
+        * `"min_max_scaling"`
+        * `"power"`
+        * `"square_root"`
+        * `"exponential"`
+        * `"tanh"`
+        * `"z_score"`
+        * `"johnson"`
+
+    * **processingData** [*bool*]: A boolean value indicating whether data processing should be performed.
+        * `true`: Data processing will be performed.
+        * `false`: Data processing will not be performed.
+
+    * **model**: This subsection defines the machine learning model to be used and its parameters.
+
+        * **name** [*string*]: The name of the model to be used. It can be one of the following:
+            * `"linear_regression"`
+            * `"logistic_regression"`
+            * `"lasso_regression"`
+            * `"ridge_regression"`
+            * `"decision_tree"`
+            * `"svm"`
+            * `"naive_bayes"`
+            * `"knn"`
+            * `"random_forest"`
+            * `"gradient_boosting"`
+            * `"xgb_regression"`
+            * `"ada_boosting"`
+
+        * **parameters** [*dict*]: A dictionary of hyperparameters for the specified model can be trained one-shot or will be optimised using Optuna hyperparameter tuning.\
+        The parameters depend directly on the chosen model.
+
+    * **metrics** [*string*]: A list of metrics to be evaluated during training. It can be one of the following:
+        * `"mean_absolute_error"`
+        * `"mean_squared_error"`
+        * `"root_mean_squared_error"`
+        * `"mean_absolute_percentage_error"`        
+        * `"r2_score"`
+        * `"explained_variance_score"`
+
+    * **tuning**: This subsection contains settings related to hyperparameter tuning using `Optuna`.
+
+        * **active** [*bool*]: A boolean value indicating whether hyperparameter tuning should be performed.
+            * `true`: Hyperparameter tuning will be performed.
+            * `false`: Hyperparameter tuning will not be performed.
+
+        * **trialsNumber** [*int*]: The number of trials for the Optuna study, for example `150`.
+
+        * **studyName** [*string*]: The name of the Optuna study, for example `"Diamonds XGBoost Regression"`.
+
+2. logger &rarr; This section contains configurations for logging during the training process.
+
+    * **configName** [*string*]: The name of the configuration file for the logger, for example `logger.ini`.
+
+    * **name** [*string*]: The name of the log file, for example `train.log`.
+
+    * **level** [*string*]: The logging level, for example `DEBUG`.
+
+    * **maxFiles** [*string*]: The maximum number of log files to keep, for example `10`.
+
+    * **rotateAtTime** [*string*]: The time at which to rotate the log files, for example `23:59`.
+
+    * **formatMessage** [*string*]: The format string for log messages. Example: `"%(asctime)s - [%(name)s:%(filename)s:%(lineno)d] - %(levelname)s: %(message)s"`.
+
+    * **formatDate** [*string*]: The format string for the date in log messages. For example: `"%Y-%m-%d %H:%M:%S"`.
+
+### Default Configurations
+
+1. **data_config.json**
+```json
+{
+    "data": {
+        "onlineSource": true,
+        "url": "https://raw.githubusercontent.com/xtreamsrl/xtream-ai-assignment-engineer/main/datasets/diamonds/diamonds.csv",
+        "localPath": "diamonds.csv",
+        "saveData": false
+    },
+    "preparation": {
+        "cleanData": {
+            "active": false
+        },
+        "dropColumns": {
+            "active": false,
+            "columns": [
+                "depth", "table", "y", "z"
+            ]
+        },
+        "toDummy": {
+            "active": false,
+            "columns_categories": {
+                "cut": [
+                    "Fair", "Good", "Very Good", "Ideal", "Premium"
+                ],
+                "color": [
+                    "D", "E", "F", "G", "H", "I", "J"
+                ],
+                "clarity": [
+                    "IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "I1"
+                ]
+            }
+        },
+        "toOrdinal": {
+            "active": false,
+            "columns_categories": {
+                "cut": [
+                    "Fair", "Good", "Very Good", "Ideal", "Premium"
+                ],
+                "color": [
+                    "D", "E", "F", "G", "H", "I", "J"
+                ],
+                "clarity": [
+                    "IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "I1"
+                ]
+            }
+        }
+    }
+}
+```
+
+2. **train_config.json**
+```json
+{
+    "training": {
+        "testSize": 0.2,
+        "randomState": null,
+        "transformation": null,
+        "processingData": true,
+        "model": {
+            "name": "linear_regression",
+            "parameters": {}
+        },
+        "metrics":[
+            "r2_score",
+            "mean_absolute_error"
+        ],
+        "tuning": {
+            "active": false,
+            "trialsNumber": 100,
+            "studyName": "Diamonds Linear Regression"
+        }
+    },
+    "logger": {
+        "configName": "logger.ini",
+        "name": "train.log",
+        "level": "DEBUG",
+        "maxFiles": 10,
+        "rotateAtTime": "23:59",
+        "formatMessage": "%(asctime)s - [%(name)s:%(filename)s:%(lineno)d] - %(levelname)s: %(message)s",
+        "formatDate": "%Y-%m-%d %H:%M:%S"
+    }
+}
+```
