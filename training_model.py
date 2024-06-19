@@ -221,7 +221,7 @@ class TrainManager:
         "knn": (KNeighborsRegressor, {}),
         "random_forest": (RandomForestRegressor, {"n_estimators": 100}),
         "gradient_boosting": (GradientBoostingRegressor, {}),
-        "xgb_regressor": (XGBRegressor, {}),
+        "xgb_regression": (XGBRegressor, {}),
         "ada_boosting": (AdaBoostRegressor, {})
     }
 

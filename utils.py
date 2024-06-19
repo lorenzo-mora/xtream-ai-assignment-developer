@@ -68,7 +68,7 @@ DEFAULT_TRAIN_CONF = {
         ],
         "tuning": {
             "active": False,
-            "trialsNumber": 5,
+            "trialsNumber": 100,
             "studyName": "Diamonds Linear Regression"
         }
     },
