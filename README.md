@@ -81,7 +81,7 @@ This command will parse the 3 configuration files specified in the *config* fold
 ### Structure of Configurations
 The file structure is well-defined and must comply with the following schemes.
 
-#### [data_config.json](/xtream-ai-assignment-developer/config/data_config.json)
+#### [data_config.json](/config/data_config.json)
 To use this configuration, ensure that the dataset source and preparation steps are correctly specified according to the requirements. Adjust the active flags and columns/categories as needed to fit the specific needs of your analysis or machine learning workflow.
 
 1. **data** &rarr; This section contains information about the source and handling of the dataset.
@@ -132,7 +132,7 @@ To use this configuration, ensure that the dataset source and preparation steps 
         * **color** [*list*]: Categories include `D`, `E`, `F`, `G`, `H`, `I`, and `J`.
         * **clarity** [*list*]: Categories include `IF`, `VVS1`, `VVS2`, `VS1`, `VS2`, `SI1`, `SI2`, and `I1`.
 
-#### train_config.json
+#### [train_config.json](/config/train_config.json)
 To use this configuration, ensure that the training parameters, model settings, and logging configurations are correctly specified according to the requirements. Adjust the active flags, hyperparameters, and logging details as needed to fit the specific needs of your machine learning workflow.
 
 1. **Training** &rarr; This section contains parameters and settings related to the training process.
@@ -442,4 +442,4 @@ All requests made to all the endpoints are stored in the `api_logs.db` database 
     * `training_model.py`: It is the main file in which all functions and classes for training models are collected;
     * `utils.py`: Utility functions for training.
 
-7. `main.py` is the python file with which one can directly launch the training of a model, as explained in X.
+7. `main.py` is the python file with which one can directly launch the training of a model, as explained in [this section](#how-to-train-a-model).
