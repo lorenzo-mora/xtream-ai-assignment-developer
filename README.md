@@ -67,7 +67,7 @@ Observability is key. Save every request and response made to the APIs to a **pr
 
 ---
 
-## How to Train a Model
+## [How to Train a Model](train)
 To train a specific model, simply run the command from the shell:
 ```
 python main.py [options]
@@ -81,7 +81,7 @@ This command will parse the 3 configuration files specified in the *config* fold
 ### Structure of Configurations
 The file structure is well-defined and must comply with the following schemes.
 
-#### data_config.json
+#### [data_config.json](/xtream-ai-assignment-developer/config/data_config.json)
 To use this configuration, ensure that the dataset source and preparation steps are correctly specified according to the requirements. Adjust the active flags and columns/categories as needed to fit the specific needs of your analysis or machine learning workflow.
 
 1. **data** &rarr; This section contains information about the source and handling of the dataset.
@@ -297,7 +297,7 @@ To use this configuration, ensure that the training parameters, model settings, 
 }
 ```
 
-## How to Use API
+## [How to Use API](api)
 
 ### POST `/predict`
 The endpoint was developed with the aim of predicting the value of a diamond from its features. The prediction can be carried out through one of the trained models by specifying its identifier.
@@ -410,3 +410,36 @@ All requests made to all the endpoints are stored in the `api_logs.db` database 
 | data_configuration | TEXT | File path or identifier for the data configuration |
 | note | TEXT | Additional notes, especially error messages if the status code is not 200 |
 
+## Project Structure
+
+1. Inside the `./api` folder is the package of the FastAPI implementation:
+    * `app.py`: The main API application script;
+    * `core.py`: Core functionalities and logic for the API;
+    * `database.py`: Database interaction logic;
+    * `request_body.py`: Defines request body structures for the API;
+
+2. The configuration files of the project, but especially of model training, are stored in `./config`. All those custom files that need to be generated for the various trainings must be placed in this folder. Otherwise, absolute paths to the configuration files must be specified.
+
+    * `data_config.json`: Example of data processing configuration. If no alternative configuration name is specified, the system will always search for the current file;
+    * `data_parameter_search_xgboost.json`: Example of data processing configuration with a customised name. In this case, it collects the data configuration for the hyperparameter search of the XGBoost model;
+    * `logger.ini`: Configuration for logging;
+    * `train_config.json`: Example of training process configuration. If no alternative configuration name is specified, the system will always search for the current file;
+    * `train_parameter_search_xgboost.json`: Example of training process configuration with a customised name. In this case, it collects the training configuration for the hyperparameter search of the XGBoost model.
+
+3. The `./data` folder contains the data required for training and possibly datasets saved during a process.
+
+4. The log folder `./log` contains within it the database for the API (`api_logs.db`) and the logging file of the training processes (`train.log`) and possibly the *tar.gz* archive of the previous days' logs.
+
+5. The `./output` folder is the directory for storing the output results and models trained in the various processes.
+
+    * `results.json`: JSON file containing the metadata of each training conducted;
+    * `./images`: subfolder in which all *GOF plots* of the various models are saved, identifiable by the associated UUID;
+    * `./models`: subdirectory in which all serialised models are stored, identifiable by their associated UUID;
+    * `./models`: subdirectory in which any serialised transformers for inverse transformations are stored. They are also identifiable by their associated UUID;
+
+6. In the `./train` folder, the package for training models is collected.
+
+    * `training_model.py`: It is the main file in which all functions and classes for training models are collected;
+    * `utils.py`: Utility functions for training.
+
+7. `main.py` is the python file with which one can directly launch the training of a model, as explained in X.
