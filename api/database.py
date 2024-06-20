@@ -144,20 +144,6 @@ def insert_request_response(
                            split_size, metrics, training_type, train_config_file,
                            data_config_file, note))
 
-    # response_dict = {
-    #     "train_id": train_id,
-    #     "model_name": model_name,
-    #     "hyperparameters": hyperparameters,
-    #     "dataset_name": dataset_name,
-    #     "processing_operation": preprocessing_operation,
-    #     "split_size": split_size,
-    #     "metrics": metrics,
-    #     "training_type": training_type if training_type else {},
-    #     "train_config_file": str(training_config),
-    #     "data_config_file": str(data_config),
-    #     "message": message
-    # }
-
             conn.commit()
     except sqlite3.Error as e:
         print(f"An error occurred while logging request and response: {e}")

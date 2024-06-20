@@ -2,17 +2,28 @@
     "training": {
         "testSize": 0.2,
         "randomState": 42,
-        "transformation": "z_score",
+        "transformation": null,
         "processingData": true,
         "model": {
-            "name": "linear_regression",
-            "parameters": {}
+            "name": "xgb_regression",
+            "parameters": {
+                "random_state": 42,
+                "enable_categorical": true,
+                "lambda": "trial.suggest_float('lambda', 1e-8, 1.0, log=True)",
+                "alpha": "trial.suggest_float('alpha', 1e-8, 1.0, log=True)",
+                "colsample_bytree": "trial.suggest_categorical('colsample_bytree', [0.3, 0.4, 0.5, 0.7])",
+                "subsample": "trial.suggest_categorical('subsample', [0.5, 0.6, 0.7, 0.8, 0.9, 1.0])",
+                "learning_rate": "trial.suggest_float('learning_rate', 1e-8, 1.0, log=True)",
+                "n_estimators": "trial.suggest_int('n_estimators', 100, 1000)",
+                "max_depth": "trial.suggest_int('max_depth', 3, 9)",
+                "min_child_weight": "trial.suggest_int('min_child_weight', 1, 10)"
+            }
         },
         "metrics": [
             "r2_score"
         ],
         "tuning": {
-            "active": false,
+            "active": true,
             "trialsNumber": 150,
             "studyName": "Diamonds XGBoost Regression"
         }
