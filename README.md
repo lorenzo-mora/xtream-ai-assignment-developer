@@ -67,7 +67,7 @@ Observability is key. Save every request and response made to the APIs to a **pr
 
 ---
 
-## How to run
+## How to Train a Model
 To train a specific model, simply run the command from the shell:
 ```
 python training_model.py
@@ -83,7 +83,7 @@ To use this configuration, ensure that the dataset source and preparation steps 
 
 1. **data** &rarr; This section contains information about the source and handling of the dataset.
 
-    * **onlineSource** [*bool*]: A boolean value indicating whether the dataset should be downloaded from an online source:
+    * **onlineSource** [*boolean*]: A boolean value indicating whether the dataset should be downloaded from an online source:
         * `true`: The dataset will be downloaded from the specified URL.
         * `false`: The dataset will be loaded from a local file path.
 
@@ -91,26 +91,26 @@ To use this configuration, ensure that the dataset source and preparation steps 
 
     * **localPath** [*string*]: The local file path to the dataset if *onlineSource* is `false`.
 
-    * **saveData** [*bool*]: A boolean value indicating whether to save the downloaded or processed data locally.
+    * **saveData** [*boolean*]: A boolean value indicating whether to save the downloaded or processed data locally.
         * `true`: The data will be saved locally.
         * `false`: The data will not be saved.
 
 2. **preparation** &rarr; This section details the steps for preparing the dataset.
 
     > **cleanData**
-    * **active** [*bool*]: A boolean value indicating whether data cleaning should be performed.
+    * **active** [*boolean*]: A boolean value indicating whether data cleaning should be performed.
         * `true`: Data cleaning will be performed.
         * `false`: Data cleaning will not be performed.
 
     > **dropColumns**
-    * **active** [*bool*]: A boolean value indicating whether certain columns should be dropped from the dataset.
+    * **active** [*boolean*]: A boolean value indicating whether certain columns should be dropped from the dataset.
         * `true`: The specified columns will be dropped.
         * `false`: The specified columns will not be dropped.
 
     * **columns** [*list*]: An array of column names to be dropped from the dataset. Example columns include `depth`, `table`, `y`, and `z`.
 
     > **toDummy**
-    * **active** [*bool*]: A boolean value indicating whether to convert categorical columns to dummy variables.
+    * **active** [*boolean*]: A boolean value indicating whether to convert categorical columns to dummy variables.
         * `true`: The specified categorical columns will be converted to dummy variables.
         * `false`: The specified categorical columns will not be converted to dummy variables.
 
@@ -120,7 +120,7 @@ To use this configuration, ensure that the dataset source and preparation steps 
         * **clarity** [*list*]: Categories include `IF`, `VVS1`, `VVS2`, `VS1`, `VS2`, `SI1`, `SI2`, and `I1`.
 
     > **toOrdinal**
-    * **active** [*bool*]: A boolean value indicating whether to convert categorical columns to ordinal variables.
+    * **active** [*boolean*]: A boolean value indicating whether to convert categorical columns to ordinal variables.
         * `true`: The specified categorical columns will be converted to ordinal variables.
         * `false`: The specified categorical columns will not be converted to ordinal variables.
 
@@ -136,7 +136,7 @@ To use this configuration, ensure that the training parameters, model settings, 
 
     * **testSize** [*float*]: The proportion of the dataset to include in the test split. For example, 0.2 indicates that 20% of the data will be used for testing.
 
-    * **randomState** [*int*]: The seed used by the random number generator to ensure reproducibility. For example, 42 is a commonly used seed value.
+    * **randomState** [*integer*]: The seed used by the random number generator to ensure reproducibility. For example, 42 is a commonly used seed value.
 
     * **transformation** [*string*]: Specifies any transformation to be applied to the data before training. In the default configuration it is set to null, indicating that there is no transformation. It may be chosen from one of:
         * `null`
@@ -150,7 +150,7 @@ To use this configuration, ensure that the training parameters, model settings, 
         * `"z_score"`
         * `"johnson"`
 
-    * **processingData** [*bool*]: A boolean value indicating whether data processing should be performed.
+    * **processingData** [*boolean*]: A boolean value indicating whether data processing should be performed.
         * `true`: Data processing will be performed.
         * `false`: Data processing will not be performed.
 
@@ -183,11 +183,11 @@ To use this configuration, ensure that the training parameters, model settings, 
 
     * **tuning**: This subsection contains settings related to hyperparameter tuning using `Optuna`.
 
-        * **active** [*bool*]: A boolean value indicating whether hyperparameter tuning should be performed.
+        * **active** [*boolean*]: A boolean value indicating whether hyperparameter tuning should be performed.
             * `true`: Hyperparameter tuning will be performed.
             * `false`: Hyperparameter tuning will not be performed.
 
-        * **trialsNumber** [*int*]: The number of trials for the Optuna study, for example `150`.
+        * **trialsNumber** [*integer*]: The number of trials for the Optuna study, for example `150`.
 
         * **studyName** [*string*]: The name of the Optuna study, for example `"Diamonds XGBoost Regression"`.
 
@@ -293,3 +293,43 @@ To use this configuration, ensure that the training parameters, model settings, 
     }
 }
 ```
+
+## How to Use API
+
+### POST `/predict`
+The endpoint was developed with the aim of predicting the value of a diamond from its features. The prediction can be carried out through one of the trained models by specifying its identifier.
+
+Its parameters are:
+* **model** [*string*, Optional] &rarr; The id of the model to be used to determine the value of the diamond. It must be one of those in the `./train/models` folder. By default the best model is set.
+* **carat** [*float*]
+* **cut** [*string*]
+* **color** [*string*]
+* **clarity** [*string*]
+* **depth** [*float*]
+* **table** [*float*]
+* **x** [*float*]
+* **y** [*float*]
+* **z** [*float*]
+
+In the event that one of these parameters does not meet the required constraints, an X error is thrown with a status code of 400.
+
+A json is returned as output with a single `predicted_value` key whose value corresponds to the float generated by the model.
+
+### POST `/similar`
+The endpoint was developed to find all those values with the same cut, colour and clarity, and with the most similar weight, with respect to the specified features. The weight difference can be determined via one of the implemented functions.
+
+Its parameters are:
+* **n** [*integer*, Optional] &rarr; The cardinality of the set of samples satisfying the search criterion. By default is 5.
+* **method** [*string*, Optional] &rarr; The method for calculating the difference between the weights. It can be one of [`"absolute difference"`, `"relative difference"`, `"squared difference"`, `"z score"`, `"cosine similarity"`] and by default is `"cosine similarity"`.
+* **dataset_name** [*string*, Optional] &rarr; The name of the saved dataset to the `./data` path from which to retrieve the set of samples. By default is `"diamonds.csv"`
+* **carat** [*float*] 
+* **cut** [*string*]
+* **color** [*string*]
+* **clarity** [*string*]
+
+***!!!*** Errori e Output
+
+All requests made to both endpoints are stored in the `api_logs.db` database at path `./log`. The database consists of 3 tables:
+1. Qualcosa
+2. Qualcosa
+3. Qualcosa
