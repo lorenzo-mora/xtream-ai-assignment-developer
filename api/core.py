@@ -9,19 +9,19 @@ import pandas as pd
 from scipy.spatial.distance import cosine
 
 BASE_PATH = Path(__file__).resolve().parents[1]
+TRAINING_PATH = BASE_PATH.joinpath("train")
+OUTPUT_PATH = BASE_PATH.joinpath("output")
+MODELS_PATH = OUTPUT_PATH.joinpath("models")
+DATA_PATH = BASE_PATH.joinpath("data")
 sys.path.append(str(BASE_PATH))
 
-from training_model import DataManager
-from utils import FileUtils, COLUMNS_CATEGORIES, inverse_transform_data
-
-TRAINING_PATH = BASE_PATH.joinpath("train")
-MODELS_PATH = TRAINING_PATH.joinpath("models")
-DATA_PATH = BASE_PATH.joinpath("data")
+from train.training_model import DataManager, main
+from train.utils import FileUtils, COLUMNS_CATEGORIES, inverse_transform_data
 
 def retrieve_metadata() -> List[dict]:
     """Retrieves the training information of all models."""
     try:
-        models = FileUtils.read_json(TRAINING_PATH.joinpath("results.json"),
+        models = FileUtils.read_json(OUTPUT_PATH.joinpath("results.json"),
                                      may_not_exist=False)
     except Exception:
         raise
@@ -144,7 +144,7 @@ def load_inverse_transformer(model_id: str, transformation: Optional[str]) -> An
     if (transformation is None or
         transformation in ["log", "square_root", "exponential", "tanh"]):
         return
-    trafo_folder = BASE_PATH.joinpath('train/transformer')
+    trafo_folder = OUTPUT_PATH.joinpath("transformer")
     trafo_path = trafo_folder.joinpath(f"transformer_{model_id}.pkl")
     return joblib.load(trafo_path)
     
@@ -295,3 +295,6 @@ def find_similar_samples(features: dict):
     # Retrieve the most similar n
     similar_samples = filtered_data.nsmallest(n, weight_diff)
     return similar_samples.to_dict(orient='records')
+
+def train_model_from_configuration(training_config, data_config):
+    main(training_config_file=training_config, data_config_file=data_config)

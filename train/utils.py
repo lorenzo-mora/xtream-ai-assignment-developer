@@ -15,6 +15,8 @@ from scipy.stats import zscore
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, PowerTransformer, QuantileTransformer
 from typing import Any, Dict, List, Optional, Tuple
 
+BASE_PATH = Path(__file__).resolve().parents[1]
+
 COLUMNS_CATEGORIES = {
     "cut": ["FAIR", "GOOD", "VERY GOOD", "IDEAL", "PREMIUM"],
     "color": ["D", "E", "F", "G", "H", "I", "J"],
@@ -545,7 +547,6 @@ class LoggerManager:
     def _initialize_logger(self, config_path: Path) -> logging.Logger:
         """Initialize the logger with parameters loaded from the
         configuration file."""
-        base_path = Path(__file__).resolve().parent
 
         # Load configuration from config.ini
         config = FileUtils.retrieve_config(config_path,
@@ -555,7 +556,7 @@ class LoggerManager:
         log_filename = get_config_value(config,
                                         ['logger', 'name'],
                                         DEFAULT_TRAIN_CONF)
-        log_file_path = base_path.joinpath(f"log/{log_filename}")
+        log_file_path = BASE_PATH.joinpath(f"log/{log_filename}")
         severity_level = get_config_value(config,
                                           ['logger', 'level'],
                                           DEFAULT_TRAIN_CONF)
@@ -577,7 +578,7 @@ class LoggerManager:
         config_filename = get_config_value(config,
                                            ['logger', 'configName'],
                                            DEFAULT_TRAIN_CONF)
-        config_file_path = base_path.joinpath(f"config/{config_filename}")
+        config_file_path = BASE_PATH.joinpath(f"config/{config_filename}")
         logging.config.fileConfig(config_file_path, disable_existing_loggers=False)
 
         # Get the logger with the name 'training'

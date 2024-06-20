@@ -27,12 +27,13 @@ import requests
 from sklearn.tree import DecisionTreeRegressor
 from xgboost import XGBRegressor
 
-from utils import (get_config_value, DEFAULT_TRAIN_CONF, DEFAULT_DATA_CONF,
-                   LoggerManager, inverse_transform_data, transform_data,
-                   FileUtils, snake_to_camel)
+from train.utils import (DEFAULT_TRAIN_CONF, DEFAULT_DATA_CONF, BASE_PATH,
+                         LoggerManager, FileUtils, snake_to_camel, get_config_value,
+                         inverse_transform_data, transform_data)
 
-BASE_PATH = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_PATH.joinpath("config")
+DATA_PATH = BASE_PATH.joinpath("data")
+OUTPUT_PATH = BASE_PATH.joinpath("output")
 
 class DataManager:
     def __init__(self, config_file: Path, logger: Logger) -> None:
@@ -55,7 +56,7 @@ class DataManager:
             source_name = get_config_value(self.configuration,
                                            ['data', 'localPath'],
                                            DEFAULT_DATA_CONF)
-            source_path = BASE_PATH.joinpath(f'data/{source_name}')
+            source_path = DATA_PATH.joinpath(source_name)
         self.logger.info(f"Acquiring data from '{source_path}'")
 
         data = (self._fetch_from_online(url=source_path)
@@ -390,7 +391,7 @@ class TrainManager:
                  for t_class in [StandardScaler, MinMaxScaler,
                                  PowerTransformer, QuantileTransformer]) or
              self.transformation == "z_score")):
-            dest_path = BASE_PATH.joinpath('train/transformer')
+            dest_path = OUTPUT_PATH.joinpath("transformer")
             model_name = f"transformer_{self.training_uuid}"
             joblib.dump(self.fitted_parameters, f'{dest_path}/{model_name}.pkl')
 
@@ -482,17 +483,16 @@ class TrainManager:
         plt.xlabel('Actual')
         plt.ylabel('Predicted')
         # Save the plot
-        file_path = BASE_PATH.joinpath(f'train/images/{filename}.png')
+        file_path = OUTPUT_PATH.joinpath(f'images/{filename}.png')
         plt.savefig(file_path, bbox_inches='tight')
 
     def _save_training(self) -> None:
         """Saves the training history and the trained model to files."""
         # Read previous results
         stored_history = {'training': []}
-        train_folder = BASE_PATH.joinpath('train')
-        train_result = train_folder.joinpath('results.json')
-        if not train_folder.exists():
-            train_folder.mkdir(parents=False)
+        train_result = OUTPUT_PATH.joinpath('results.json')
+        if not OUTPUT_PATH.exists():
+            OUTPUT_PATH.mkdir(parents=False)
         elif train_result.exists():
             with open(train_result) as f:
                 stored_history = json.load(f)
@@ -503,7 +503,7 @@ class TrainManager:
             json.dump(stored_history, f, ensure_ascii=False, indent=4)
 
         # Saving the trained model
-        models_folder = train_folder.joinpath('models')
+        models_folder = OUTPUT_PATH.joinpath('models')
         if not models_folder.exists():
             models_folder.mkdir(parents=False)
         model_name = f'model_{self.training_uuid}'
