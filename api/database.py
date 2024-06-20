@@ -124,7 +124,7 @@ def insert_request_response(
                           (request_id, response_time, carat, cut, color, clarity,
                            number_samples, method, dataset_name, samples, note))
             elif path.replace("/", "") == 'train':
-                config_metadata = response_body.get('training_config')
+                config_metadata = response_body.get('training_config', {})
                 train_id = config_metadata.get('train_id')
                 model_name = config_metadata.get('model_name')
                 hyperparameters = json.dumps(config_metadata.get('hyperparameters')) if config_metadata.get('hyperparameters') else "default"
@@ -132,7 +132,9 @@ def insert_request_response(
                 processing_operation = json.dumps(config_metadata.get('processing_operation')) if config_metadata.get('processing_operation') else None
                 split_size = config_metadata.get('split_size')
                 metrics = json.dumps(config_metadata.get('metrics')) if config_metadata.get('metrics') else None
-                training_type = json.dumps(config_metadata.get('training_type')) if config_metadata.get('training_type') else "one-shot"
+                training_type = config_metadata.get('training_type')
+                if isinstance(training_type, dict):
+                    training_type = json.dumps(training_type)
                 train_config_file = config_metadata.get('train_config_file')
                 data_config_file = config_metadata.get('data_config_file')
                 note = (response_body.get('message')

@@ -94,7 +94,7 @@ async def train_model(train_config: TrainModel) -> JSONResponse:
         message = metadata.pop('message')
 
         response_content = {
-            "message": message, #"Model training initiated successfully.",
+            "message": message,
             "training_config": metadata
         }
         return JSONResponse(content=response_content, status_code=200)

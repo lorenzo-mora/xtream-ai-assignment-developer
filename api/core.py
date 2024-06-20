@@ -33,7 +33,7 @@ def retrieve_ids(metadata: List[dict]) -> List[str]:
     """Retrieves the list of all trained model ids."""
     return [m['id'] for m in metadata]
 
-def check_features_values(features: dict,
+def check_features_values(request_body: dict,
                           metadata: Optional[List[dict]] = None) -> None:
     """Checks that the features passed as input are correct, throwing an
     HTTPException in the event of an error."""
@@ -43,7 +43,7 @@ def check_features_values(features: dict,
         available_models = retrieve_ids(metadata)
 
         # Check that the required id is present among the existing models
-        if 'model' in features and features['model'] not in available_models:
+        if 'model' in request_body and request_body['model'] not in available_models:
             raise HTTPException(status_code=400, detail=[
                     {
                         "loc": ["body", "model"],
@@ -53,8 +53,8 @@ def check_features_values(features: dict,
                 ])
 
     # Check that the specified cut is correct
-    if ('cut' in features and
-        features['cut'].upper() not in ['FAIR', 'GOOD', 'VERY GOOD', 'IDEAL', 'PREMIUM']):
+    if ('cut' in request_body and
+        request_body['cut'].upper() not in ['FAIR', 'GOOD', 'VERY GOOD', 'IDEAL', 'PREMIUM']):
         raise HTTPException(status_code=400, detail=[
                 {
                     "loc": ["body", "cut"],
@@ -64,8 +64,8 @@ def check_features_values(features: dict,
             ])
 
     # Check that the specified colour is correct
-    if ('color' in features and
-        features['color'].upper() not in ['D', 'E', 'F', 'G', 'H', 'I', 'J']):
+    if ('color' in request_body and
+        request_body['color'].upper() not in ['D', 'E', 'F', 'G', 'H', 'I', 'J']):
         raise HTTPException(status_code=400, detail=[
                 {
                     "loc": ["body", "color"],
@@ -75,8 +75,8 @@ def check_features_values(features: dict,
             ])
 
     # Check that the specified clarity is correct
-    if ('clarity' in features and
-        features['clarity'].upper() not in ['IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1']):
+    if ('clarity' in request_body and
+        request_body['clarity'].upper() not in ['IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1']):
         raise HTTPException(status_code=400, detail=[
                 {
                     "loc": ["body", "clarity"],
@@ -88,7 +88,7 @@ def check_features_values(features: dict,
     # Check that all specified values are positive
     feature_names = ['carat', 'depth', 'table', 'x', 'y', 'z']
     for f in feature_names:
-        if f in features and features[f] < 0:
+        if f in request_body and request_body[f] < 0:
             raise HTTPException(status_code=400, detail=[
                 {
                     "loc": ["body", f],
@@ -98,8 +98,8 @@ def check_features_values(features: dict,
             ])
 
     # Check that the specified method is correct
-    if ('method' in features and
-        features['method'].lower() not in [
+    if ('method' in request_body and
+        request_body['method'].lower() not in [
             'absolute difference', 'relative difference', 'squared difference',
             'z score', 'cosine similarity']):
         raise HTTPException(status_code=400, detail=[
@@ -111,7 +111,7 @@ def check_features_values(features: dict,
             ])
 
     # Check that the specified method is correct
-    if ('n' in features and features['n'] < 1):
+    if ('n' in request_body and request_body['n'] < 1):
         raise HTTPException(status_code=400, detail=[
                 {
                     "loc": ["body", "n"],
@@ -121,8 +121,8 @@ def check_features_values(features: dict,
             ])
 
     # Check the existence of the specified dataset 'dataset_name'
-    if ('dataset_name' in features and
-        not DATA_PATH.joinpath(features['dataset_name']).exists()):
+    if ('dataset_name' in request_body and
+        not DATA_PATH.joinpath(request_body['dataset_name']).exists()):
         raise HTTPException(status_code=400, detail=[
                 {
                     "loc": ["body", "dataset_name"],
@@ -130,6 +130,21 @@ def check_features_values(features: dict,
                     "type": "value_error.not_existing"
                 }
             ])
+
+    # Consistency check of configuration file name/path parameters
+    required_pairs = [
+        ('training_config_name', 'data_config_name'),
+        ('training_config_path', 'data_config_path')
+    ]
+    for pair in required_pairs:
+        if bool(request_body[pair[0]]) != bool(request_body[pair[1]]):
+            raise HTTPException(status_code=400, detail=[
+                    {
+                        "loc": ["body", pair[0] if not bool(request_body[pair[0]]) else pair[1]],
+                        "msg": "The parameters must be consistent",
+                        "type": "value_error.parameter_inconsistency"
+                    }
+                ])
 
 def load_model(model_id: str) -> Any:
     """Loads the model with id equal to `model_id`, which is required
@@ -298,6 +313,23 @@ def find_similar_samples(features: dict) -> dict:
     return similar_samples.to_dict(orient='records')
 
 def train_model_from_configuration(configs: dict) -> dict:
+    """Trains a model based on the two specified configuration files.
+    
+    Expected JSON format:
+    {
+        "training_config_name": "train_config.json",
+        "data_config_name": "data_config.json"
+    }
+
+    or
+    
+    {
+        "training_config_path": "path/to/train_config.json",
+        "data_config_path": "path/to/data_config.json"
+    }
+    """
+
+    check_features_values(configs)
 
     message = "Successful training"
     # Retrieving the paths to the two configuration files
@@ -347,6 +379,7 @@ def train_model_from_configuration(configs: dict) -> dict:
 
     training_type = train_object.configuration.get('training').get('tuning')
     tuning_active = training_type.get('active', False)
+    trial_number = training_type.get('trialsNumber')
 
     response_dict = {
         "train_id": train_id,
@@ -356,7 +389,7 @@ def train_model_from_configuration(configs: dict) -> dict:
         "processing_operation": preprocessing_operation,
         "split_size": split_size,
         "metrics": metrics,
-        "training_type": training_type if tuning_active else None,
+        "training_type": f"bayesian hyperparameter tuning [{trial_number} trials]" if tuning_active else "one-shot",
         "train_config_file": str(training_config),
         "data_config_file": str(data_config),
         "message": message
