@@ -27,9 +27,9 @@ import requests
 from sklearn.tree import DecisionTreeRegressor
 from xgboost import XGBRegressor
 
-from train.utils import (DEFAULT_TRAIN_CONF, DEFAULT_DATA_CONF, BASE_PATH,
-                         LoggerManager, FileUtils, snake_to_camel, get_config_value,
-                         inverse_transform_data, transform_data)
+from .utils import (DEFAULT_TRAIN_CONF, DEFAULT_DATA_CONF, BASE_PATH,
+                    LoggerManager, FileUtils, snake_to_camel, get_config_value,
+                    inverse_transform_data, transform_data)
 
 CONFIG_PATH = BASE_PATH.joinpath("config")
 DATA_PATH = BASE_PATH.joinpath("data")
@@ -559,9 +559,8 @@ class TrainManager:
                 processed_params[key] = value
         return processed_params
 
-# 5. Automated Pipeline
 def main(training_config_file: Path = CONFIG_PATH.joinpath("train_config.json"),
-         data_config_file: Path = CONFIG_PATH.joinpath("data_config.json")):
+         data_config_file: Path = CONFIG_PATH.joinpath("data_config.json")) -> TrainManager:
 
     logger_manager = LoggerManager(config_path=training_config_file)
     logger = logger_manager.logger
@@ -583,6 +582,4 @@ def main(training_config_file: Path = CONFIG_PATH.joinpath("train_config.json"),
     else:
         # Otherwise, single model training is performed
         tm.run()
-
-if __name__ == "__main__":
-    main()
+    return tm
