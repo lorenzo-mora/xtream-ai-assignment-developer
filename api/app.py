@@ -5,8 +5,8 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
-from core import predict_diamond_value, find_similar_samples, BASE_PATH
-from request_body import DiamondFeatures, SimilarRequest
+from core import predict_diamond_value, find_similar_samples, BASE_PATH, train_model_from_configuration
+from request_body import DiamondFeatures, SimilarRequest, TrainModel
 from database import insert_request_response, create_tables
 
 # Path to the SQLite DB
@@ -82,6 +82,23 @@ async def similar(features: SimilarRequest) -> JSONResponse:
             }
         return JSONResponse(content=response_content, status_code=200)
     except Exception:
-        raise 
+        raise
+
+@router.post("/train")
+async def train_model(train_config: TrainModel) -> JSONResponse:
+    try:
+        configurations_json = jsonable_encoder(train_config)
+
+        metadata = train_model_from_configuration(configurations_json)
+
+        message = metadata.pop('message')
+
+        response_content = {
+            "message": message, #"Model training initiated successfully.",
+            "training_config": metadata
+        }
+        return JSONResponse(content=response_content, status_code=200)
+    except Exception:
+        raise
     
 app.include_router(router)

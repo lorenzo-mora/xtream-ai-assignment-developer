@@ -13,6 +13,7 @@ TRAINING_PATH = BASE_PATH.joinpath("train")
 OUTPUT_PATH = BASE_PATH.joinpath("output")
 MODELS_PATH = OUTPUT_PATH.joinpath("models")
 DATA_PATH = BASE_PATH.joinpath("data")
+CONFIG_PATH = BASE_PATH.joinpath("config")
 sys.path.append(str(BASE_PATH))
 
 from train.training_model import DataManager, main
@@ -171,7 +172,7 @@ def prepare_data(features: dict, metadata: list) -> Tuple[pd.DataFrame, dict]:
     else:
         features_df, model_metadata
 
-def predict_diamond_value(features: dict):
+def predict_diamond_value(features: dict) -> float:
     """The value of the diamond with the features defined in the request
     is predicted through the requested model.
     
@@ -245,7 +246,7 @@ def calculate_similarity(similarity_type: str,
     else:
         return similarity_functions[similarity_type](weight1, weight2)
 
-def find_similar_samples(features: dict):
+def find_similar_samples(features: dict) -> dict:
     """Retrieves the N samples with the same cut, colour and clarity and
     the closest weight to the diamond with the features specified in the
     request.
@@ -296,5 +297,68 @@ def find_similar_samples(features: dict):
     similar_samples = filtered_data.nsmallest(n, weight_diff)
     return similar_samples.to_dict(orient='records')
 
-def train_model_from_configuration(training_config, data_config):
-    main(training_config_file=training_config, data_config_file=data_config)
+def train_model_from_configuration(configs: dict) -> dict:
+
+    message = "Successful training"
+    # Retrieving the paths to the two configuration files
+    if "training_config_name" in configs:
+        training_config_name = configs['training_config_name']
+        data_config_name = configs['data_config_name']
+        training_config = CONFIG_PATH.joinpath(training_config_name)
+        data_config = CONFIG_PATH.joinpath(data_config_name)
+    elif "training_config_path" in configs:
+        training_config = configs['training_config_path']
+        data_config = configs['data_config_path']
+
+    error_train_path = False
+    error_data_path = False
+    if not Path(training_config).exists():
+        training_config = CONFIG_PATH.joinpath("train_config.json")
+        error_train_path = True
+    if not Path(data_config).exists():
+        data_config = CONFIG_PATH.joinpath("data_config.json")
+        error_data_path = True
+
+    if error_train_path and error_data_path:
+        message = "Both configuration files do not exist"
+    elif error_train_path:
+        message = "Training configuration file non-existent"
+    elif error_data_path:
+        message = "Data configuration file non-existent"
+
+    # Model training
+    train_object = main(training_config_file=training_config,
+                        data_config_file=data_config)
+
+    # Retrieval of training configuration metadata
+    train_id = train_object.training_uuid
+    model_name = train_object.history['modelType']
+    hyperparameters = train_object.history['parameters']
+
+    metadata_dataset = train_object.history['data']
+    dataset_name = metadata_dataset['name']
+    preprocessing_operation = {k: v
+                               for k, v in metadata_dataset.items()
+                               if k in ['clean', 'reduced', 'dummy', 'ordinal']}
+    preprocessing_operation['transformation'] = train_object.history['transformation']
+    split_size = train_object.history['splitSize']
+
+    metrics = train_object.history['evaluationMetrics']
+
+    training_type = train_object.configuration.get('training').get('tuning')
+    tuning_active = training_type.get('active', False)
+
+    response_dict = {
+        "train_id": train_id,
+        "model_name": model_name,
+        "hyperparameters": hyperparameters,
+        "dataset_name": dataset_name,
+        "processing_operation": preprocessing_operation,
+        "split_size": split_size,
+        "metrics": metrics,
+        "training_type": training_type if tuning_active else None,
+        "train_config_file": str(training_config),
+        "data_config_file": str(data_config),
+        "message": message
+    }
+    return response_dict

@@ -50,6 +50,23 @@ def create_tables(path: Path) -> None:
                             FOREIGN KEY (request_id) REFERENCES requests (id)
                          )''')
 
+            c.execute('''CREATE TABLE IF NOT EXISTS training (
+                            id TEXT PRIMARY KEY,
+                            request_id INTEGER,
+                            response_time TEXT,
+                            type TEXT,
+                            parameters TEXT,
+                            dataset_name TEXT,
+                            preprocessing TEXT,
+                            split_size REAL,
+                            evaluation TEXT,
+                            training_type TEXT,
+                            training_configuration TEXT,
+                            data_configuration TEXT,
+                            note TEXT,
+                            FOREIGN KEY (request_id) REFERENCES requests (id)
+                         )''')
+
             conn.commit() 
     except sqlite3.Error as e:
         print(f"An error occurred while creating tables: {e}")
@@ -90,7 +107,9 @@ def insert_request_response(
                 predicted_value = response_body.get('predicted_value')
                 c.execute('''INSERT INTO prediction (request_id, response_time, carat, cut, color, clarity, depth, table_val, x, y, z, predicted_value, model, note)
                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                          (request_id, response_time, carat, cut, color, clarity, depth, table_val, x, y, z, predicted_value, model, note))
+                          (request_id, response_time, carat, cut, color,
+                           clarity, depth, table_val, x, y, z, predicted_value,
+                           model, note))
             elif path.replace("/", "") == 'similar':
                 carat = request_body.get('carat')
                 cut = request_body.get('cut')
@@ -102,8 +121,43 @@ def insert_request_response(
                 samples = json.dumps(response_body.get('samples')) if response_body.get('samples') else None
                 c.execute('''INSERT INTO similarity (request_id, response_time, carat, cut, color, clarity, number_samples, method, dataset_name, samples, note)
                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                          (request_id, response_time, carat, cut, color, clarity, number_samples, method, dataset_name, samples, note))
-    
+                          (request_id, response_time, carat, cut, color, clarity,
+                           number_samples, method, dataset_name, samples, note))
+            elif path.replace("/", "") == 'train':
+                config_metadata = response_body.get('training_config')
+                train_id = config_metadata.get('train_id')
+                model_name = config_metadata.get('model_name')
+                hyperparameters = json.dumps(config_metadata.get('hyperparameters')) if config_metadata.get('hyperparameters') else "default"
+                dataset_name = config_metadata.get('dataset_name')
+                processing_operation = json.dumps(config_metadata.get('processing_operation')) if config_metadata.get('processing_operation') else None
+                split_size = config_metadata.get('split_size')
+                metrics = json.dumps(config_metadata.get('metrics')) if config_metadata.get('metrics') else None
+                training_type = json.dumps(config_metadata.get('training_type')) if config_metadata.get('training_type') else "one-shot"
+                train_config_file = config_metadata.get('train_config_file')
+                data_config_file = config_metadata.get('data_config_file')
+                note = (response_body.get('message')
+                        if not note and response_body.get('message') != "Successful training" else note)
+                c.execute('''INSERT INTO training (id, request_id, response_time, type, parameters, dataset_name, preprocessing, split_size, evaluation, training_type, training_configuration, data_configuration, note)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                          (train_id, request_id, response_time, model_name,
+                           hyperparameters, dataset_name, processing_operation,
+                           split_size, metrics, training_type, train_config_file,
+                           data_config_file, note))
+
+    # response_dict = {
+    #     "train_id": train_id,
+    #     "model_name": model_name,
+    #     "hyperparameters": hyperparameters,
+    #     "dataset_name": dataset_name,
+    #     "processing_operation": preprocessing_operation,
+    #     "split_size": split_size,
+    #     "metrics": metrics,
+    #     "training_type": training_type if training_type else {},
+    #     "train_config_file": str(training_config),
+    #     "data_config_file": str(data_config),
+    #     "message": message
+    # }
+
             conn.commit()
     except sqlite3.Error as e:
         print(f"An error occurred while logging request and response: {e}")
