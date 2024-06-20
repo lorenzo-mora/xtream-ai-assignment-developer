@@ -32,6 +32,7 @@ from utils import (get_config_value, DEFAULT_TRAIN_CONF, DEFAULT_DATA_CONF,
                    FileUtils, snake_to_camel)
 
 BASE_PATH = Path(__file__).resolve().parent
+CONFIG_PATH = BASE_PATH.joinpath("config")
 
 class DataManager:
     def __init__(self, config_file: Path, logger: Logger) -> None:
@@ -559,10 +560,9 @@ class TrainManager:
         return processed_params
 
 # 5. Automated Pipeline
-def main():
+def main(training_config_file: Path = CONFIG_PATH.joinpath("train_config.json"),
+         data_config_file: Path = CONFIG_PATH.joinpath("data_config.json")):
 
-    training_config_file = BASE_PATH.joinpath("config/train_config.json")
-    data_config_file = BASE_PATH.joinpath("config/data_config.json")
     logger_manager = LoggerManager(config_path=training_config_file)
     logger = logger_manager.logger
 
