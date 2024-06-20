@@ -344,7 +344,7 @@ The object should contain the following optional fields:
 
 You must specify either both `training_config_name` and `data_config_name` or both `training_config_path` and `data_config_path`. If neither pair is provided, the request will be considered invalid and an error will be returned.
 
-### API Logs Database
+### [API Logs Database](/log/api_logs.db)
 All requests made to all the endpoints are stored in the `api_logs.db` database at path `./log`. The database consists of 4 tables:
 1. `requests` &rarr; This table logs general information about each API request.
 
