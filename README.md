@@ -70,8 +70,11 @@ Observability is key. Save every request and response made to the APIs to a **pr
 ## How to Train a Model
 To train a specific model, simply run the command from the shell:
 ```
-python training_model.py
+python main.py [options]
 ```
+where options are:
+* `-t`, `--training_config_file`: Path to the training configuration file. Default is `./config/train_config.json`.
+* `-d`, `--data_config_file`: Path to the data configuration file. Default is `./config/data_config.json`.
 
 This command will parse the 3 configuration files specified in the *config* folder. Of particular relevance are `data_config.json`, for information on which data to use and how to process it, and `train_config.json`, for the configuration of model training.
 
@@ -115,7 +118,7 @@ To use this configuration, ensure that the dataset source and preparation steps 
         * `false`: The specified categorical columns will not be converted to dummy variables.
 
     * **columns_categories** [*dict*]: An object specifying the categorical columns and their categories to be converted to dummy variables.
-        * **cut** [*list*]: Categories include `Fair`, `Good`, `Very Good`, `Ideal`, and `Premium`.
+        * **cut** [*list*]: Categories include `FAIR`, `GOOD`, `VERY GOOD`, `IDEAL`, and `PREMIUM`.
         * **color** [*list*]: Categories include `D`, `E`, `F`, `G`, `H`, `I`, and `J`.
         * **clarity** [*list*]: Categories include `IF`, `VVS1`, `VVS2`, `VS1`, `VS2`, `SI1`, `SI2`, and `I1`.
 
@@ -125,7 +128,7 @@ To use this configuration, ensure that the dataset source and preparation steps 
         * `false`: The specified categorical columns will not be converted to ordinal variables.
 
     * **columns_categories** [*dict*]: An object specifying the categorical columns and their categories to be converted to ordinal variables.
-        * **cut** [*list*]: Categories include `Fair`, `Good`, `Very Good`, `Ideal`, and `Premium`.
+        * **cut** [*list*]: Categories include `FAIR`, `GOOD`, `VERY GOOD`, `IDEAL`, and `PREMIUM`.
         * **color** [*list*]: Categories include `D`, `E`, `F`, `G`, `H`, `I`, and `J`.
         * **clarity** [*list*]: Categories include `IF`, `VVS1`, `VVS2`, `VS1`, `VS2`, `SI1`, `SI2`, and `I1`.
 
@@ -300,7 +303,7 @@ To use this configuration, ensure that the training parameters, model settings, 
 The endpoint was developed with the aim of predicting the value of a diamond from its features. The prediction can be carried out through one of the trained models by specifying its identifier.
 
 Its parameters are:
-* **model** [*string*, Optional] &rarr; The id of the model to be used to determine the value of the diamond. It must be one of those in the `./train/models` folder. By default the best model is set.
+* **model** [*string*, Optional] &rarr; The id of the model to be used to determine the value of the diamond. It must be one of those in the `./output/models` folder. By default the best model is set.
 * **carat** [*float*]
 * **cut** [*string*]
 * **color** [*string*]
@@ -327,9 +330,83 @@ Its parameters are:
 * **color** [*string*]
 * **clarity** [*string*]
 
-***!!!*** Errori e Output
+A json is returned with a unique `samples` key that collects a list of all N samples that meet the similarity conditions.
 
-All requests made to both endpoints are stored in the `api_logs.db` database at path `./log`. The database consists of 3 tables:
-1. Qualcosa
-2. Qualcosa
-3. Qualcosa
+### POST `/train`
+The purpose of the endpoint is to launch the training of a model from the specified configuration files.\
+It performs the same operation as could be achieved by launching the command: `python main.py -t <training_config_path> -d <data_config_path>`.
+
+The object should contain the following optional fields:
+* **training_config_name** [*string*, Optional]: The name of the training configuration stored in the `./config` folder. This field should be provided along with `data_config_name` if you choose to use named configurations.
+* **data_config_name** [*string*, Optional]: The name of the data configuration stored in the `./config` folder. This field should be provided along with `training_config_name` if you choose to use named configurations.
+* **training_config_path** [*string*, Optional]: The file path to the training configuration. This field should be provided along with `data_config_path` if you choose to use file paths for configurations.
+* **data_config_path** [*string*, Optional]: The file path to the data configuration. This field should be provided along with `training_config_path` if you choose to use file paths for configurations.
+
+You must specify either both `training_config_name` and `data_config_name` or both `training_config_path` and `data_config_path`. If neither pair is provided, the request will be considered invalid and an error will be returned.
+
+### API Logs Database
+All requests made to all the endpoints are stored in the `api_logs.db` database at path `./log`. The database consists of 4 tables:
+1. `requests` &rarr; This table logs general information about each API request.
+
+| Column | Type | Description |
+|---|---|---|
+| id* | INTEGER | Unique identifier for each request |
+| timestamp | TEXT | The time when the request was made |
+| method | TEXT | The HTTP method used for the request (e.g., GET, POST) |
+| path | TEXT | The path of the API endpoint that was called |
+| status code | INTEGER | The HTTP status code returned by the API |
+
+2. `predict` &rarr; This table stores information about prediction requests and their responses.
+
+| Column | Type | Description |
+|---|---|---|
+| id* | INTEGER | Unique identifier for each prediction request |
+| request_id^ | INTEGER | References the `id` in the `requests` table |
+| response_time | TEXT | The time taken to respond to the prediction request |
+| carat | REAL | The carat of the diamond |
+| cut | TEXT | The cut of the diamond |
+| color | TEXT | The color grade of the diamond |
+| clarity | TEXT | The clarity grade of the diamond |
+| depth | REAL | The depth percentage of the diamond |
+| table_val | REAL | The table percentage of the diamond |
+| x | REAL | The length of the diamond in mm |
+| y | REAL | The width of the diamond in mm |
+| z | REAL | The depth of the diamond in mm |
+| predicted_value | REAL | The predicted value of the diamond |
+| note | TEXT | Additional notes, especially error messages if the status code is not 200 |
+
+3. `similar` &rarr; This table stores information about similarity requests and their responses.
+
+| Column | Type | Description |
+|---|---|---|
+| id* | INTEGER | Unique identifier for each similarity entry |
+| request_id^ | INTEGER | References the id in the requests table |
+| response_time | TEXT | The time taken to respond to the similarity request |
+| carat | REAL | The carat of the diamond |
+| cut | TEXT | The cut of the diamond |
+| color | TEXT | The color grade of the diamond |
+| clarity | TEXT | The clarity grade of the diamond |
+| number_samples | INTEGER | The number of similar samples requested |
+| method | TEXT | The method used for finding similarity (e.g., cosine similarity) |
+| dataset_name | TEXT | The name of the dataset used |
+| samples | TEXT | JSON string containing the similar samples |
+| note | TEXT | Additional notes, especially error messages if the status code is not 200 |
+
+4. `training` &rarr; This table stores information about training requests and their responses.
+
+| Column | Type | Description |
+|---|---|---|
+| id* | TEXT | Unique identifier for each training session |
+| request_id^ | INTEGER | References the id in the requests table |
+| response_time | TEXT | The time taken to respond to the similarity request |
+| type | TEXT | The type of model trained |
+| parameters | TEXT | JSON string containing training parameters or "default" if no hyperparameters have been specified in configuration |
+| dataset_name | TEXT | The name of the dataset used for training |
+| preprocessing | TEXT | JSON string containing pre-processing operations or NULL if no operation was active |
+| split_size | REAL | The size of the data split for training and testing |
+| evaluation | TEXT | JSON string containing the evaluation metrics |
+| training_type | TEXT | If trained through Bayesian optimisation, a JSON string with search parameters, otherwise "one-shot" |
+| training_configuration | TEXT | File path or identifier for the training configuration |
+| data_configuration | TEXT | File path or identifier for the data configuration |
+| note | TEXT | Additional notes, especially error messages if the status code is not 200 |
+
