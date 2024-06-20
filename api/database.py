@@ -51,10 +51,11 @@ def create_tables(path: Path) -> None:
                          )''')
 
             c.execute('''CREATE TABLE IF NOT EXISTS training (
-                            id TEXT PRIMARY KEY,
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
                             request_id INTEGER,
                             response_time TEXT,
                             type TEXT,
+                            model_id TEXT,
                             parameters TEXT,
                             dataset_name TEXT,
                             preprocessing TEXT,
@@ -139,9 +140,9 @@ def insert_request_response(
                 data_config_file = config_metadata.get('data_config_file')
                 note = (response_body.get('message')
                         if not note and response_body.get('message') != "Successful training" else note)
-                c.execute('''INSERT INTO training (id, request_id, response_time, type, parameters, dataset_name, preprocessing, split_size, evaluation, training_type, training_configuration, data_configuration, note)
+                c.execute('''INSERT INTO training (request_id, response_time, type, model_id, parameters, dataset_name, preprocessing, split_size, evaluation, training_type, training_configuration, data_configuration, note)
                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                          (train_id, request_id, response_time, model_name,
+                          (request_id, response_time, model_name, train_id,
                            hyperparameters, dataset_name, processing_operation,
                            split_size, metrics, training_type, train_config_file,
                            data_config_file, note))

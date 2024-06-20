@@ -10,7 +10,7 @@
             "active": true
         },
         "dropColumns": {
-            "active": true,
+            "active": false,
             "columns": [
                 "depth",
                 "table",
@@ -19,7 +19,7 @@
             ]
         },
         "toDummy": {
-            "active": true,
+            "active": false,
             "columns_categories": {
                 "cut": [
                     "FAIR", "GOOD", "VERY GOOD", "IDEAL", "PREMIUM"
@@ -33,7 +33,7 @@
             }
         },
         "toOrdinal": {
-            "active": false,
+            "active": true,
             "columns_categories": {
                 "cut": [
                     "FAIR", "GOOD", "VERY GOOD", "IDEAL", "PREMIUM"

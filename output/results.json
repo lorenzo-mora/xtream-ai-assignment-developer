@@ -1,0 +1,108 @@
+{
+    "training": [
+        {
+            "id": "0f914f9f-5b88-4231-ba4c-104ef73b435b",
+            "ts": "2024-06-20 23:42:13",
+            "data": {
+                "name": "diamonds.csv",
+                "onlineSource": true,
+                "clean": true,
+                "reduced": false,
+                "dummy": false,
+                "ordinal": true
+            },
+            "transformation": null,
+            "splitSize": 0.2,
+            "modelType": "Xgb Regression",
+            "parameters": {
+                "random_state": 42,
+                "enable_categorical": true
+            },
+            "evaluationMetrics": {
+                "r2_score": 0.9592839987554616,
+                "mean_absolute_error": 354.9499480834227
+            }
+        },
+        {
+            "id": "ea7ee3ed-dc34-4fae-b048-ef872f2d1d76",
+            "ts": "2024-06-20 23:43:17",
+            "data": {
+                "name": "diamonds.csv",
+                "onlineSource": true,
+                "clean": true,
+                "reduced": [
+                    "depth",
+                    "table",
+                    "y",
+                    "z"
+                ],
+                "dummy": true,
+                "ordinal": false
+            },
+            "transformation": null,
+            "splitSize": 0.2,
+            "modelType": "Linear Regression",
+            "parameters": {},
+            "evaluationMetrics": {
+                "r2_score": 0.9088260830128694,
+                "mean_absolute_error": 760.6935724689425
+            }
+        },
+        {
+            "id": "c00ff587-d10a-433f-b369-54da382b660b",
+            "ts": "2024-06-20 23:43:44",
+            "data": {
+                "name": "diamonds.csv",
+                "onlineSource": true,
+                "clean": true,
+                "reduced": [
+                    "depth",
+                    "table",
+                    "y",
+                    "z"
+                ],
+                "dummy": true,
+                "ordinal": false
+            },
+            "transformation": "Log",
+            "splitSize": 0.2,
+            "modelType": "Linear Regression",
+            "parameters": {},
+            "evaluationMetrics": {
+                "r2_score": 0.9053883481784035,
+                "mean_absolute_error": 561.5414310908875
+            }
+        },
+        {
+            "id": "e705470a-608d-4a65-b948-141f67284573",
+            "ts": "2024-06-20 23:44:27",
+            "data": {
+                "name": "diamonds.csv",
+                "onlineSource": true,
+                "clean": true,
+                "reduced": false,
+                "dummy": false,
+                "ordinal": true
+            },
+            "transformation": null,
+            "splitSize": 0.2,
+            "modelType": "Xgb Regression",
+            "parameters": {
+                "lambda": 5.633049259425752e-07,
+                "alpha": 2.484289525467969e-06,
+                "colsample_bytree": 0.7,
+                "subsample": 0.7,
+                "learning_rate": 0.027342379441227947,
+                "n_estimators": 482,
+                "max_depth": 5,
+                "min_child_weight": 5,
+                "random_state": 42,
+                "enable_categorical": true
+            },
+            "evaluationMetrics": {
+                "r2_score": 0.9676844538322513,
+                "mean_absolute_error": 337.45918809053654
+            }
+        }
+    ]
+}
