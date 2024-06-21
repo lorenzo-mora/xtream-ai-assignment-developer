@@ -235,7 +235,7 @@ To use this configuration, ensure that the training parameters, model settings, 
             "active": false,
             "columns_categories": {
                 "cut": [
-                    "Fair", "Good", "Very Good", "Ideal", "Premium"
+                    "FAIR", "GOOD", "VERY GOOD", "IDEAL", "PREMIUM"
                 ],
                 "color": [
                     "D", "E", "F", "G", "H", "I", "J"
@@ -249,7 +249,7 @@ To use this configuration, ensure that the training parameters, model settings, 
             "active": false,
             "columns_categories": {
                 "cut": [
-                    "Fair", "Good", "Very Good", "Ideal", "Premium"
+                    "FAIR", "GOOD", "VERY GOOD", "IDEAL", "PREMIUM"
                 ],
                 "color": [
                     "D", "E", "F", "G", "H", "I", "J"
@@ -448,4 +448,4 @@ All requests made to all the endpoints are stored in the `api_logs.db` database 
 
 7. `main.py` is the python file with which one can directly launch the training of a model, as explained in [this section](#how-to-train-a-model).
 
-8. run_api.py` is the python file that starts the Uvicorn server, thus enabling the use of the api, as [described above](#how-to-use-api).
+8. `run_api.py` is the python file that starts the Uvicorn server, thus enabling the use of the api, as [described above](#how-to-use-api).
