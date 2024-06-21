@@ -5,9 +5,9 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
-from core import predict_diamond_value, find_similar_samples, BASE_PATH, train_model_from_configuration
-from request_body import DiamondFeatures, SimilarRequest, TrainModel
-from database import insert_request_response, create_tables
+from .core import predict_diamond_value, find_similar_samples, BASE_PATH, train_model_from_configuration
+from .request_body import DiamondFeatures, SimilarRequest, TrainModel
+from .database import insert_request_response, create_tables
 
 # Path to the SQLite DB
 DB_PATH = BASE_PATH.joinpath('log/api_logs.db')

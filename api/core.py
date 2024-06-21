@@ -137,7 +137,8 @@ def check_features_values(request_body: dict,
         ('training_config_path', 'data_config_path')
     ]
     for pair in required_pairs:
-        if bool(request_body[pair[0]]) != bool(request_body[pair[1]]):
+        if ((pair[0] in request_body or pair[1] in request_body) and
+            bool(request_body[pair[0]]) != bool(request_body[pair[1]])):
             raise HTTPException(status_code=400, detail=[
                     {
                         "loc": ["body", pair[0] if not bool(request_body[pair[0]]) else pair[1]],

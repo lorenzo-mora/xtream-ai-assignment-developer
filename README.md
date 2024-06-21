@@ -69,7 +69,7 @@ Observability is key. Save every request and response made to the APIs to a **pr
 
 ## [How to Train a Model](train)
 To train a specific model, simply run the command from the shell:
-```
+```shell
 python main.py [options]
 ```
 where options are:
@@ -298,6 +298,10 @@ To use this configuration, ensure that the training parameters, model settings, 
 ```
 
 ## [How to Use API](api)
+First of all, you need to run the following python file, which will start the **Uvicorn** server on the *localhost* at port *8080*.
+```shell
+python run_api.py
+```
 
 ### POST `/predict`
 The endpoint was developed with the aim of predicting the value of a diamond from its features. The prediction can be carried out through one of the trained models by specifying its identifier.
@@ -443,3 +447,5 @@ All requests made to all the endpoints are stored in the `api_logs.db` database 
     * `utils.py`: Utility functions for training.
 
 7. `main.py` is the python file with which one can directly launch the training of a model, as explained in [this section](#how-to-train-a-model).
+
+8. run_api.py` is the python file that starts the Uvicorn server, thus enabling the use of the api, as [described above](#how-to-use-api).
