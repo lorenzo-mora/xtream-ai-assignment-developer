@@ -2,7 +2,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 class DiamondFeatures(BaseModel):
-    model: Optional[str] = "19349c13-b711-4440-b669-ed9b199ad5e3"
+    model: Optional[str] = "e705470a-608d-4a65-b948-141f67284573"
     carat: float
     cut: str
     color: str

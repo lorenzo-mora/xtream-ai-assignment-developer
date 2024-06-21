@@ -103,6 +103,31 @@
                 "r2_score": 0.9676844538322513,
                 "mean_absolute_error": 337.45918809053654
             }
+        },
+        {
+            "id": "66936912-7d2d-4081-8ee1-2d1f69e2928d",
+            "ts": "2024-06-21 11:48:09",
+            "data": {
+                "name": "diamonds.csv",
+                "onlineSource": true,
+                "clean": true,
+                "reduced": [
+                    "depth",
+                    "table",
+                    "y",
+                    "z"
+                ],
+                "dummy": true,
+                "ordinal": false
+            },
+            "transformation": null,
+            "splitSize": 0.2,
+            "modelType": "Knn",
+            "parameters": {},
+            "evaluationMetrics": {
+                "r2_score": 0.8777088078304798,
+                "mean_absolute_error": 654.4951903807615
+            }
         }
     ]
 }

@@ -428,7 +428,7 @@ All requests made to all the endpoints are stored in the `api_logs.db` database 
 
 3. The `./data` folder contains the data required for training and possibly datasets saved during a process.
 
-4. The log folder `./log` contains within it the database for the API (`api_logs.db`) and the logging file of the training processes (`train.log`) and possibly the *tar.gz* archive of the previous days' logs.
+4. The log folder `./log` contains within it the database for the API (`api_logs.db`) and the logging file of the training processes (`train.log`) and possibly the *tar.gz* archive of the previous days' logs (`train-log.tar.gz`).
 
 5. The `./output` folder is the directory for storing the output results and models trained in the various processes.
 
