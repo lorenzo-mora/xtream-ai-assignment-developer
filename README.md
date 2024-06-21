@@ -400,10 +400,11 @@ All requests made to all the endpoints are stored in the `api_logs.db` database 
 
 | Column | Type | Description |
 |---|---|---|
-| id* | TEXT | Unique identifier for each training session |
+| id* | INTEGER | Unique identifier for each training session |
 | request_id^ | INTEGER | References the id in the requests table |
 | response_time | TEXT | The time taken to respond to the similarity request |
 | type | TEXT | The type of model trained |
+| model_id | TEXT | The UUID associated with the model |
 | parameters | TEXT | JSON string containing training parameters or "default" if no hyperparameters have been specified in configuration |
 | dataset_name | TEXT | The name of the dataset used for training |
 | preprocessing | TEXT | JSON string containing pre-processing operations or NULL if no operation was active |
@@ -413,6 +414,8 @@ All requests made to all the endpoints are stored in the `api_logs.db` database 
 | training_configuration | TEXT | File path or identifier for the training configuration |
 | data_configuration | TEXT | File path or identifier for the data configuration |
 | note | TEXT | Additional notes, especially error messages if the status code is not 200 |
+
+[The symbol **\*** represents the primary key and **^** the foreign key]
 
 ## Project Structure
 
